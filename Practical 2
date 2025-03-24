@@ -1,1 +1,205 @@
+---
+title: "Practical 2"
+output: html_document
+date: "2025-02-20"
+---
+#PART 1
+```{r setup, include=FALSE}
+load("/Users/melvildeleage/Downloads/Practical2/niveau.Rdata")
+```
 
+##A
+```{r cars}
+# Charger les bibliothèques
+library(tidyverse)
+library(lubridate)
+library(extRemes)
+
+# Convertir les dates
+niveau$Date <- as.Date(niveau$Zeitstempel, format="%Y-%m-%d %H:%M:%S")
+
+# Extraire l'année
+niveau <- niveau %>%
+  mutate(Year = year(Date))
+
+# Filtrer les années 1940 à 2009
+niveau_filtered <- niveau %>%
+  filter(Year >= 1940, Year <= 2009)
+
+# Calcul des maxima annuels
+venice_max <- niveau_filtered %>%
+  group_by(Year) %>%
+  summarise(Max_Sea_Level = max(Wert, na.rm = TRUE))
+
+# Affichage
+head(venice_max)
+
+# Graphique
+ggplot(venice_max, aes(x = Year, y = Max_Sea_Level)) +
+  geom_line(color = "blue") +
+  geom_point(color = "blue") +
+  labs(title = "Maxima annuels du niveau de la mer à Venise (1940–2009)",
+       x = "Année", y = "Niveau maximal (cm)")
+
+```
+
+##B
+```{r cars3}
+# Modèle linéaire
+lm_model <- lm(Max_Sea_Level ~ Year, data = venice_max)
+
+# Préparation des années futures
+future_years <- data.frame(Year = 2010:2022)
+
+# Prédictions avec intervalles de confiance
+predictions <- predict(lm_model, newdata = future_years, interval = "confidence")
+future_years <- cbind(future_years, predictions)
+
+# Résultats
+head(future_years)
+
+
+```
+
+##C
+```{r cars2}
+# Observations > 140 cm
+extreme_sea_levels <- data.frame(
+  Year = c(2010, 2012, 2018, 2019, 2020),
+  Observed_Level = c(144, 142, 146, 187, 148)
+)
+
+# Représentation graphique
+ggplot() +
+  geom_line(data = venice_max, aes(x = Year, y = Max_Sea_Level), color = "blue") +
+  geom_point(data = venice_max, aes(x = Year, y = Max_Sea_Level), color = "blue") +
+  geom_line(data = future_years, aes(x = Year, y = fit), color = "red") +
+  geom_ribbon(data = future_years, aes(x = Year, ymin = lwr, ymax = upr), alpha = 0.3, fill = "red") +
+  geom_point(data = extreme_sea_levels, aes(x = Year, y = Observed_Level), color = "black", size = 3) +
+  labs(title = "Prédiction des maxima annuels (2010–2022) et événements > 140 cm",
+       x = "Année", y = "Niveau de la mer (cm)")
+
+
+```
+##D
+```{r cars1}
+# GEV à paramètres constants
+gev_const <- fevd(venice_max$Max_Sea_Level, type = "GEV")
+
+# GEV avec location variable dans le temps
+gev_loc <- fevd(venice_max$Max_Sea_Level, type = "GEV", location.fun = ~Year, data = venice_max)
+
+# Comparaison par LRT
+lrt_result <- lr.test(gev_const, gev_loc)
+lrt_result
+
+# Diagnostic plots
+par(mfrow = c(2, 2))
+plot(gev_const)
+plot(gev_loc)
+
+
+```
+##E
+```{r pressure, echo=FALSE}
+# S'assurer que les colonnes Year et Max_Sea_Level sont bien là
+str(venice_max)
+
+# GEV avec location + scale dépendants de l’année
+gev_loc_scale <- fevd(
+  x = venice_max$Max_Sea_Level,
+  data = venice_max,
+  type = "GEV",
+  location.fun = ~Year,
+  scale.fun = ~Year
+)
+
+# LRT entre location variable et location + scale variables
+lrt_loc_vs_locscale <- lr.test(gev_loc, gev_loc_scale)
+lrt_loc_vs_locscale
+
+
+```
+
+##Ffaux
+```{r pressure, echo=FALSE}
+# Étape 1 : Extraire les coefficients du modèle GEV avec location variable
+coef_gev <- coef(gev_loc)
+
+# Vérification des noms exacts des coefficients
+print(coef_gev)
+
+# Extraire chaque coefficient explicitement
+intercept_loc <- coef_gev[["location:(Intercept)"]]
+slope_loc     <- coef_gev[["location:Year"]]
+scale         <- coef_gev[["scale"]]
+shape         <- coef_gev[["shape"]]
+
+# Étape 2 : Créer un data.frame pour les années futures
+years_future <- data.frame(Year = 2010:2022)
+
+# Étape 3 : Calculer le paramètre de localisation (mu) pour chaque année
+years_future$loc <- intercept_loc + slope_loc * years_future$Year
+
+# Étape 4 : Définir la fonction pour calculer le niveau de retour GEV
+gev_return_level <- function(mu, sigma, xi, T) {
+  if (abs(xi) < 1e-6) {
+    # Cas limite xi ≈ 0 (Gumbel)
+    return(mu - sigma * log(-log(1 - 1/T)))
+  } else {
+    return(mu + (sigma / xi) * ((-log(1 - 1/T))^xi - 1))
+  }
+}
+
+# Étape 5 : Calculer les niveaux de retour 13 ans pour chaque année
+years_future$Return_Level_13 <- mapply(gev_return_level,
+                                       mu = years_future$loc,
+                                       sigma = scale,
+                                       xi = shape,
+                                       T = 13)
+
+# Affichage du résultat
+print(years_future)
+
+
+```
+
+
+##G
+```{r pressure, echo=FALSE}
+
+# IC approximatifs par bootstrapping (option possible)
+# Sinon, version simplifiée avec CI autour des return levels
+
+# Exemple : prédiction + IC via boot (attention: peut être long)
+# gev_ci <- ci(gev_loc, return.period = 13, alpha = 0.05)
+
+# (Pour simplifier, IC pas calculé en boucle ici, mais peut se faire avec ci() pour chaque année si besoin)
+```
+
+##HFaux
+```{r pressure, echo=FALSE}
+ggplot() +
+  geom_line(data = venice_max, aes(x = Year, y = Max_Sea_Level), color = "blue") +
+  geom_point(data = venice_max, aes(x = Year, y = Max_Sea_Level), color = "blue") +
+  
+  geom_line(data = future_years, aes(x = Year, y = fit), color = "red") +
+  geom_ribbon(data = future_years, aes(x = Year, ymin = lwr, ymax = upr), fill = "red", alpha = 0.3) +
+  
+  geom_point(data = extreme_sea_levels, aes(x = Year, y = Observed_Level), color = "black", size = 3) +
+  
+  geom_line(data = years_future, aes(x = Year, y = Return_Level_13), color = "purple", linetype = "dashed") +
+  
+  labs(title = "Prédictions : modèle linéaire, GEV (13-yr return level), événements extrêmes",
+       x = "Année", y = "Niveau de la mer (cm)")
+
+```
+
+
+##I 
+```{r pressure, echo=FALSE}
+
+Le modèle linéaire montre une tendance croissante du niveau maximal, mais il ignore l extrême variabilité interannuelle.
+Le modèle GEV avec localisation variable capture mieux les événements extrêmes. Le niveau de retour sur 13 ans est une valeur qu on s attend à dépasser environ une fois tous les 13 ans. Or, sur la période 2010–2022, **plusieurs valeurs dépassent ce seuil**, ce qui suggère une augmentation du risque extrême, cohérente avec le réchauffement climatique.
+Sur les 20 événements dépassant 140 cm, **12 se produisent au XXIe siècle**, ce qui renforce l’idée d’un changement structurel dans la fréquence des événements extrêmes.
+```
