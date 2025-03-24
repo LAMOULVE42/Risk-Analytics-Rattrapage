@@ -1,0 +1,189 @@
+---
+title: "Practical 1"
+output:
+  html_document: default
+  pdf_document: default
+date: "2025-02-20"
+---
+```{r setup20, include=FALSE}
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+install.packages("QRM")
+install.packages("tseries")
+install.packages("nortest")
+install.packages("MASS")
+install.packages("ggplot2")
+library(QRM)
+library(tseries)
+library(nortest)
+library(MASS)
+library(ggplot2)
+```
+
+# PART 1
+##A
+```{r setup1, include=FALSE}
+install.packages("QRM")
+library("QRM")
+library(tseries)   # Pour le test ADF
+
+# Charger les indices boursiers
+data("sp500")
+data("cac40")
+
+# Convertir en séries numériques exploitables
+sp500_ts <- na.omit(as.numeric(sp500))
+cac40_ts <- na.omit(as.numeric(cac40))
+
+# Vérification de la stationnarité avec le test ADF
+adf_sp500 <- adf.test(sp500_ts)
+adf_cac40 <- adf.test(cac40_ts)
+
+# Affichage des résultats
+print(adf_sp500)
+print(adf_cac40)
+
+```
+
+##B
+```{r pressure, echo=FALSE}
+# Fonction pour calculer les rendements log-négatifs
+log_neg_returns <- function(series) {
+  ret <- -diff(log(series))
+  return(na.omit(ret))  # Supprimer les NA potentiels
+}
+
+# Calcul des rendements log-négatifs
+sp500_ret <- log_neg_returns(sp500_ts)
+cac40_ret <- log_neg_returns(cac40_ts)
+
+# Tracer les séries des rendements
+plot(sp500_ret, type="l", main="SP500 Negative Log Returns", col="blue")
+plot(cac40_ret, type="l", main="CAC40 Negative Log Returns", col="red")
+
+```
+
+##C
+```{r pressure1, echo=FALSE}
+library(ggplot2)
+
+# Histogramme des rendements SP500
+hist(sp500_ret, probability=TRUE, main="Histogram of SP500 Returns", col="blue")
+curve(dnorm(x, mean=mean(sp500_ret), sd=sd(sp500_ret)), col="red", add=TRUE)
+
+# Histogramme des rendements CAC40
+hist(cac40_ret, probability=TRUE, main="Histogram of CAC40 Returns", col="red")
+curve(dnorm(x, mean=mean(cac40_ret), sd=sd(cac40_ret)), col="blue", add=TRUE)
+
+```
+##D
+
+```{r pressure2, echo=FALSE}
+# QQ-plot SP500
+qqnorm(sp500_ret, main="QQ-plot SP500 Returns")
+qqline(sp500_ret, col="red")
+
+# QQ-plot CAC40
+qqnorm(cac40_ret, main="QQ-plot CAC40 Returns")
+qqline(cac40_ret, col="blue")
+
+```
+##E
+```{r pressure3, echo=FALSE}
+library(nortest)  # Pour le test Anderson-Darling
+
+# Test de normalité sur les rendements
+ad_sp500 <- ad.test(sp500_ret)
+ad_cac40 <- ad.test(cac40_ret)
+
+# Affichage des résultats
+print(ad_sp500)
+print(ad_cac40)
+
+```
+
+##F
+```{r pressure4, echo=FALSE}
+library(MASS)  # Pour fitdistr()
+
+# Ajustement d'une loi normale
+fit_norm_sp500 <- fitdistr(sp500_ret, "normal")
+fit_norm_cac40 <- fitdistr(cac40_ret, "normal")
+
+# Ajustement d'une loi t de Student
+fit_t_sp500 <- fitdistr(sp500_ret, "t")
+fit_t_cac40 <- fitdistr(cac40_ret, "t")
+
+# Affichage des résultats
+print(fit_norm_sp500)
+print(fit_t_sp500)
+
+print(fit_norm_cac40)
+print(fit_t_cac40)
+
+```
+##G
+```{r pressure5, echo=FALSE}
+# QQ-plot pour SP500 avec la distribution t
+qqplot(rt(length(sp500_ret), df=fit_t_sp500$estimate["df"]), sp500_ret, main="QQ-plot SP500 vs t-Distribution")
+abline(0,1,col="red")
+
+# QQ-plot pour CAC40 avec la distribution t
+qqplot(rt(length(cac40_ret), df=fit_t_cac40$estimate["df"]), cac40_ret, main="QQ-plot CAC40 vs t-Distribution")
+abline(0,1,col="blue")
+
+
+```
+
+# Part 2
+##A
+```{r pressure6, echo=FALSE}
+acf(sp500)
+acf(sp500_ret)
+
+acf(cac40)
+acf(cac40_ret)
+
+
+
+```
+##B
+```{r pressure7, echo=FALSE}
+Box.test(sp500_ret, lag=20, type="Ljung-Box")
+Box.test(cac40_ret, lag=20, type="Ljung-Box")
+```
+##C
+```{r pressure8, echo=FALSE}
+library(forecast)
+
+arima_sp500 <- auto.arima(sp500_ret)
+arima_cac40 <- auto.arima(cac40_ret)
+
+summary(arima_sp500)
+summary(arima_cac40)
+```
+##D
+```{r pressure9, echo=FALSE}
+acf(residuals(arima_sp500))
+acf(residuals(arima_cac40))
+```
+##E
+```{r pressure10, echo=FALSE}
+library(TTR)  # Pour runSD (écart-type mobile)
+
+volatility <- function(series) {
+  return(runSD(series, n=30))
+}
+
+plot(volatility(sp500), type="l", main="SP500 Volatility")
+plot(volatility(cac40), type="l", main="CAC40 Volatility")
+```
+##F
+```{r pressure11, echo=FALSE}
+library(fGarch)
+
+garch_sp500 <- garchFit(~ garch(1,1), data=sp500_ret, trace=FALSE)
+garch_cac40 <- garchFit(~ garch(1,1), data=cac40_ret, trace=FALSE)
+
+summary(garch_sp500)
+summary(garch_cac40)
+```
