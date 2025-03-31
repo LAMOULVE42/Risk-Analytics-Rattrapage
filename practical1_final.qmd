@@ -293,9 +293,36 @@ summary(garch_cac40)
 
 By applying a GARCH model on the ARMA model, the mean and volatility dynamics are well captured. The GARCH parameters are highly significant for both series. The final models for both SP500 and CAC40 effectively remove serial correlation from the residuals and capture the volatility clustering, making them appropriate for modeling on negative log returns.
 
-## Question g) FAUX
+## Question g)
 
 > Use the garchAuto.R script in order to fit a GARCH on the residuals of the ARMA(p,q) from (g). Assess the quality of the fit.
 
-A FINIR
+```{r}
+source(here::here("data", "Practical1", "garchAuto.R"))
 
+# Fit ARMA models to the negative log returns
+arma_sp500 <- auto.arima(sp500_ret)
+arma_cac40 <- auto.arima(cac40_ret)
+
+# Extract the ARMA residuals
+resid_sp500 <- residuals(arma_sp500)
+resid_cac40 <- residuals(arma_cac40)
+
+# Call the garchAuto() function on the ARMA residuals to fit a GARCH(1,1) model
+garch_model_sp500 <- garchAuto(resid_sp500)
+garch_model_cac40 <- garchAuto(resid_cac40)
+
+# Assess the quality of the GARCH fits
+summary(garch_model_sp500)
+summary(garch_model_cac40)
+
+# Extract the residuals from the GARCH models
+garch_resid_sp500 <- residuals(garch_model_sp500)
+garch_resid_cac40 <- residuals(garch_model_cac40)
+
+# Now apply checkresiduals() to the residuals
+checkresiduals(garch_resid_sp500)
+checkresiduals(garch_resid_cac40)
+```
+
+The garchAuto() function searches for the mean over a range of ARMA orders combined ith a fixed GARCH(1,1) for the variance and then selects the best model based on AIC. The GARCH parameters seems significant. The checkresiduals() function shows that the standardized residuals have no significatn serial correlation, meaning that the mean and volatility are well modeled. So, applying the garchAuto() fit results in the models providing a good fit. The residuals behave like white noise, the volatility is well captured and there is no remains of autocorrelation.

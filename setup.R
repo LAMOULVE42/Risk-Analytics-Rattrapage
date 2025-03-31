@@ -13,7 +13,8 @@ packages <- c(
   "fpp3",
   "forecast",
   "fGarch",
-  "TTR"
+  "TTR",
+  "parallel"
 )
 
 # Function that install the packages if not already installed on your computer
@@ -24,3 +25,4 @@ for (pkg in packages) {
 # load the packages
 for (pkg in packages) {
   library(pkg, character.only = TRUE)}
+
