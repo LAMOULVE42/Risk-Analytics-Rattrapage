@@ -1,0 +1,341 @@
+---
+title: Practical 1
+date: today
+date-format: long
+author: Melvil Deleage, Jeff Macaraeg
+toc: true
+format:
+  pdf:
+    code-fold: false
+    toc: true
+    code-block-border-left: "#0d6efd"
+    code-block-bg: true
+    highlight-style: github
+    geometry: margin = 1.5cm
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup20, include=FALSE}
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+install.packages("QRM")
+install.packages("tseries")
+install.packages("nortest")
+install.packages("MASS")
+install.packages("ggplot2")
+install.packages("nortest")
+install.packages("stats")
+install.packages("forecast")
+install.packages("TTR")
+install.packages("fGarch")
+library(QRM)
+library(tseries)
+library(nortest)
+library(MASS)
+library(ggplot2)
+library(nortest)
+library(stats)
+library(forecast)
+library(TTR)
+library(fGarch)
+```
+
+# Part 1 - Financial Returns & Normality
+
+## Question a)
+
+> Read in the data. Then, assess the stationarity of the (raw) stock indices.
+
+```{r setup1, include=FALSE}
+# Load SP500 & CAC40 data
+data("sp500")
+data("cac40")
+
+# Convert to usable numeric series
+sp500_ts <- na.omit(as.numeric(sp500))
+cac40_ts <- na.omit(as.numeric(cac40))
+
+# Checking stationarity with Augmented Dickey-Fuller (ADF) test
+adf_sp500 <- adf.test(sp500_ts)
+adf_cac40 <- adf.test(cac40_ts)
+
+# Print results
+print(adf_sp500)
+print(adf_cac40)
+
+# Plot the SP500 index
+plot(sp500, type = "l", col = "blue", main = "SP500 Index", ylab = "Index Value")
+
+# Plot the CAC40 index
+plot(cac40, type = "l", col = "red", main = "CAC40 Index", ylab = "Index Value")
+```
+
+As a result, we can see that for SP500, the p-value is 0.9044 and for CAC40, the p-value is 0.9676. As they are both higher than 0.05, we can conclude that both series are not stationary.
+
+## Question b)
+
+> Create a function to transform the daily stock indices into their daily negative log returns counterparts. Plot the latter series and assess their stationarity. To compare the series, also plot the negative log returns on a common scale to all indices.
+
+```{r pressure, echo=FALSE}
+# Function to compute negative log returns
+log_neg_returns <- function(series) {
+  ret <- -diff(log(series))
+  return(na.omit(ret))  # Remove potential NA values
+}
+
+# Compute negative log returns for each index
+sp500_ret <- log_neg_returns(sp500_ts)
+cac40_ret <- log_neg_returns(cac40_ts)
+
+# Plot individual series of negative log returns
+par(mfrow = c(1, 2))
+plot(sp500_ret, type="l", main="SP500 Negative Log Returns", col="blue")
+plot(cac40_ret, type="l", main="CAC40 Negative Log Returns", col="red")
+
+# Assess stationarity with the ADF test
+library(tseries)  # Ensure the tseries package is loaded for adf.test()
+adf_sp500 <- adf.test(sp500_ret)
+adf_cac40 <- adf.test(cac40_ret)
+
+# Print the ADF test results
+print("ADF Test for SP500:")
+print(adf_sp500)
+print("ADF Test for CAC40:")
+print(adf_cac40)
+```
+
+As both plots seem to not show trends, periodic cycles and a stable variance, the series seem to be stationary. To verify this, the ADF test shows that both p-values (p-value = 0.01) are lower than 0.05, so we reject the hypothesis and thus, both series are stationary.
+
+## Question c)
+
+> Draw histograms of the negative log returns and compare them to the Normal distribution. What do you observe?
+
+```{r pressure1, echo=FALSE}
+library(ggplot2)
+
+# Histogram of SP500 negative log returns
+hist(sp500_ret, probability=TRUE, main="Histogram of SP500 Returns", col="blue")
+curve(dnorm(x, mean=mean(sp500_ret), sd=sd(sp500_ret)), col="red", add=TRUE)
+
+# Histogram of CAC40 negative log returns
+hist(cac40_ret, probability=TRUE, main="Histogram of CAC40 Returns", col="red")
+curve(dnorm(x, mean=mean(cac40_ret), sd=sd(cac40_ret)), col="blue", add=TRUE)
+```
+
+Both histograms have bell-shaped distributions, but are not perfectly aligned with the normal curve. ALso, the tails seeem to go further than what the normal disctribution curve predicts, which can indicate a higher probability of extreme returns than expected in a normal model.
+
+## Question d)
+
+> Check the normality assumption of the negative log returns using QQ-plots. What is your conclusion?
+
+```{r pressure2, echo=FALSE}
+# QQ-plot SP500
+qqnorm(sp500_ret, main="QQ-plot SP500 Returns")
+qqline(sp500_ret, col="blue")
+
+# QQ-plot CAC40
+qqnorm(cac40_ret, main="QQ-plot CAC40 Returns")
+qqline(cac40_ret, col="red")
+```
+
+On both the lower and upper extremes, the points deviate from the line, showing heavier tails than a normal distribution. So, the negative log returns don't seem to follow normal distribution.
+
+## Question e)
+
+> Formally test the normality assumption of the negative log returns using an Anderson-Darling testing procedure. Do you reject the Normal hypothesis?
+
+```{r pressure3, echo=FALSE}
+# ADF test for normality for negative log returns
+ad_sp500 <- ad.test(sp500_ret)
+ad_cac40 <- ad.test(cac40_ret)
+
+# Print results
+print(ad_sp500)
+print(ad_cac40)
+```
+
+As both p-values are lower than 0.05 (both at 2.2e-16), we reject the null hypothesis, meaning that the returns are not normally distributed.
+
+## Question f)
+
+> Use the fitdistr() function from the MASS package in order to obtain the (maximum-likelihood estimated) parameters of distributions you could imagine for the negative log returns. Try to fit at least two diﬀerent distributions on the data and, using an information criteria (such as the AIC), decide which distributional framework fits best for each of the series.
+
+```{r pressure4, echo=FALSE}
+# Fitting a normal distribution
+fit_norm_sp500 <- fitdistr(sp500_ret, "normal")
+fit_norm_cac40 <- fitdistr(cac40_ret, "normal")
+
+# Fitting a Student's t distribution
+fit_t_sp500 <- fitdistr(sp500_ret, "t")
+fit_t_cac40 <- fitdistr(cac40_ret, "t")
+
+# Print the results
+print(fit_norm_sp500)
+print(fit_t_sp500)
+
+print(fit_norm_cac40)
+print(fit_t_cac40)
+
+# Compute AIC values
+AIC(fit_norm_sp500)
+AIC(fit_t_sp500)
+AIC(fit_norm_cac40)
+AIC(fit_t_cac40)
+```
+
+As the Student model yields lower AIC than the normal model, it indicates a better balance between the goodness-of-fit and the complexity. It is a more appropriate choice of model.
+
+## Question g)
+
+> If this has not been done in (f), fit a t-distribution to the negative log returns using fitdistr(). Using a QQ-plot for each of the series, decide whether the fit is better than with a Normal distribution, based on your answer in (d).
+
+```{r pressure5, echo=FALSE}
+# QQ-plot for SP500 using a t-distribution
+qqplot(rt(length(sp500_ret), df=fit_t_sp500$estimate["df"]), sp500_ret, main="QQ-plot SP500 vs t-Distribution")
+qqline(sp500_ret, col="blue")
+
+# QQ-plot for CAC40 using a t-distribution
+qqplot(rt(length(cac40_ret), df=fit_t_cac40$estimate["df"]), cac40_ret, main="QQ-plot CAC40 vs t-Distribution")
+qqline(cac40_ret, col="red")
+```
+
+Despite some deviations from points in the extremes, the QQ-plots confirm that a Student's t-distribution provides a better fit for both the SP500 and CAC40 log returns compared to a normal distribution. The heavier tails of the t-distribution captures the extremes better. It is also consistent with question d).
+
+# Part 2 - Financial time series, volatility and the random walk hypothesis
+
+## Question a)
+
+> Plot the ACF of all the series in Part 1 (i.e. the raw series as well as the negative log returns). What do you observe?
+
+```{r pressure6, echo=FALSE}
+par(mfrow = c(2, 2))
+
+# ACF for the raw and negative log returns for SP500
+acf(sp500, main = "ACF of SP500 Raw Series", col = "blue")
+acf(sp500_ret, main = "ACF of SP500 Negative Log Returns", col = "blue")
+
+# ACF for the raw and negative log returns for CAC40
+acf(cac40, main = "ACF of CAC40 Raw Series", col = "red")
+acf(cac40_ret, main = "ACF of CAC40 Negative Log Returns", col = "red")
+```
+
+The raw series show high autocorrelation at all lags, implying non-stationarity. For the negative log returns, it shows little to no autocorrelation, suggesting that the daily returns are close to uncorrelated.
+
+## Question b)
+
+> Use a Ljung-Box procedure to formally test for (temporal) serial dependence in the series. What is your conclusion?
+
+```{r pressure7, echo=FALSE}
+# Ljung-Box test for SP500
+Box.test(sp500, lag=20, type="Ljung-Box")
+Box.test(sp500_ret, lag=20, type="Ljung-Box")
+
+# Ljung-Box test for CAC40
+Box.test(cac40, lag=20, type="Ljung-Box")
+Box.test(cac40_ret, lag=20, type="Ljung-Box")
+```
+
+Looking at the raw series for both CAC40 and SP500, we obtain a p-value that is lower than 0.05 (both at 2.2e-16), so we reject the null hypothesis and the raw series show autocorrelation. For both negative log returns, the p-values are higher than the raw series (0.0068 for SP500, 0.003639 for CAC40), but still smaller than the p-value, so again they show autocorrelation.
+
+## Question c)
+
+> Propose ARIMA models for each of the negative log returns series, based on visualisation tools (e.g. ACF and PACF). Select an ARIMA model using auto.arima() (forecast package) to each of the negative log returns series. Comment on the diﬀerence. Assess the residuals of the resulting models.
+
+```{r pressure8, echo=FALSE}
+par(mfrow = c(1, 2))
+
+# Fit ARIMA models using auto.arima()
+arima_sp500 <- auto.arima(sp500_ret)
+arima_cac40 <- auto.arima(cac40_ret)
+
+par(mfrow = c(2, 2))
+
+# ACF & PACF for SP500 negative log returns
+acf(sp500_ret, main = "ACF - SP500 Negative Log Returns", col = "blue")
+pacf(sp500_ret, main = "PACF - SP500 Negative Log Returns", col = "blue")
+
+# ACF & PACF for CAC40 negative log returns
+acf(cac40_ret, main = "ACF - CAC40 Negative Log Returns", col = "red")
+pacf(cac40_ret, main = "PACF - CAC40 Negative Log Returns", col = "red")
+
+checkresiduals(arima_sp500)
+checkresiduals(arima_cac40)
+
+summary(arima_sp500)
+summary(arima_cac40)
+```
+
+The ACF & PACF for both SP500 & CAC40 negative log returns show almost no significant autocorrelation, indicating that the returns behave in a similar way to white noise.It is also confirmed by checking the residuals. We can also observe that the auto.arima() function selected very simple models.
+
+## Question d)
+
+> Assess the residuals of the resulting models from (c), both their raw values and their absolute values, through visual tools (such as the ACF) and formal tests (e.g. Ljung-Box). What do you conclude about the independence assumption?
+
+```{r pressure9, echo=FALSE}
+par(mfrow = c(1, 2))
+acf(residuals(arima_sp500))
+acf(residuals(arima_cac40))
+```
+
+The independence assumption holds for the raw residuals but not for the volatility patterns (autocorrelation in the absolute residuals). So, further modeling could be used to fully capture the dynamics of the residuals.
+
+## Question e)
+
+> Plot the volatility of the raw series of indices. What is your conclusion on the homoscedasticity assumption?
+
+```{r pressure10, echo=FALSE}
+# Calculate volatility & plots
+volatility <- function(series) {
+  return(runSD(series, n=30))
+}
+plot(volatility(sp500), type="l", main="SP500 Volatility", col = "blue")
+plot(volatility(cac40), type="l", main="CAC40 Volatility", col = "red")
+```
+
+The data shows heteroskedasticity, as the volatility (or variance) is not constant over time.
+
+## Question f)
+
+> Residual serial correlation can be present when fitting a GARCH directly on the negative log returns. Hence, in order to circumvent this problem, it is possible to use the following two-step approach:
+• fit an ARMA(p,q) on the negative log returns;
+• fit a GARCH(1,1) on the residuals of the ARMA(p,q) fit.
+Proceed with the above recipe. Assess the quality of the above fit.
+
+```{r pressure11, echo=FALSE}
+# Garch fitting on negative log returns
+garch_sp500 <- garchFit(~ garch(1,1), data=sp500_ret, trace=FALSE)
+garch_cac40 <- garchFit(~ garch(1,1), data=cac40_ret, trace=FALSE)
+
+summary(garch_sp500)
+summary(garch_cac40)
+```
+
+By applying a GARCH model on the ARMA model, the mean and volatility dynamics are well captured. The GARCH parameters are highly significant for both series. The final models for both SP500 and CAC40 effectively remove serial correlation from the residuals and capture the volatility clustering, making them appropriate for modeling on negative log returns.
+
+## Question g) FAUX
+
+> Use the garchAuto.R script in order to fit a GARCH on the residuals of the ARMA(p,q) from (g). Assess the quality of the fit.
+
+```{r pressure 12, echo=FALSE}
+# Set the working directory if needed, then source the script
+source(file.path("data", "Practical 1", "garchAuto.R"))
+
+# Fit an ARMA model to the negative log returns
+arma_sp500 <- auto.arima(sp500_ret)
+arma_cac40 <- auto.arima(cac40_ret)
+
+# Extract the ARMA residuals
+resid_sp500 <- residuals(arma_sp500)
+resid_cac40 <- residuals(arma_cac40)
+
+# Fit a GARCH(1,1) model to the ARMA residuals using the garchAuto() function
+garch_model_sp500 <- garchAuto(resid_sp500)
+garch_model_cac40 <- garchAuto(resid_cac40)
+
+# Assess the quality of the GARCH fits
+summary(garch_model_sp500)
+summary(garch_model_cac40)
+checkresiduals(garch_model_sp500)
+checkresiduals(garch_model_cac40)
+```
+
