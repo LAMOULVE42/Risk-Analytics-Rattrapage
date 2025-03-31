@@ -1,0 +1,164 @@
+---
+title: Practical 2
+date: today
+date-format: long
+author: Melvil Deleage, Jeff Macaraeg
+toc: true
+format:
+  pdf:
+    code-fold: false
+    toc: true
+    code-block-border-left: "#0d6efd"
+    code-block-bg: true
+    highlight-style: github
+    geometry: margin = 1.5cm
+editor_options: 
+  chunk_output_type: console
+---
+
+# Part 1 - Venice
+
+```{r}
+load("/Users/jeffmacaraeg/Documents/GitHub/Retake_RA/data/Practical2/niveau.Rdata")
+```
+
+## Question a) 
+
+> Read in the data. Extract and represent the yearly max values from 1940 to 2009. What do you
+observe ?
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(extRemes)
+
+niveau$Date <- as.Date(niveau$Zeitstempel, format="%Y-%m-%d %H:%M:%S")
+
+niveau <- niveau %>%
+  mutate(Year = year(Date))
+
+niveau_filtered <- niveau %>%
+  filter(Year >= 1940, Year <= 2009)
+
+venice_max <- niveau_filtered %>%
+  group_by(Year) %>%
+  summarise(Max_Sea_Level = max(Wert, na.rm = TRUE))
+
+ggplot(venice_max, aes(x = Year, y = Max_Sea_Level)) +
+  geom_line(color = "blue") +
+  geom_point(color = "blue") +
+  labs(title = "Yearly max value (1940–2009)",
+       x = "Year", y = "Yearly max (cm)")
+```
+
+There seems to be an increasing trend overtime. However, there is some variability from years to years, some of them indicating potential extreme events.
+
+## Question b)
+
+```{r}
+# Fit a linear model on the observed data
+lm_fit <- lm(Max_Sea_Level ~ Year, data = venice_max)
+summary(lm_fit)  # Optional: review model details
+
+# Create a new data frame for the prediction period
+future_years <- data.frame(Year = 2010:2022)
+
+# Obtain predictions with 95% confidence intervals
+predictions <- predict(lm_fit, newdata = future_years, interval = "confidence")
+pred_df <- cbind(future_years, as.data.frame(predictions))
+
+# Plot the historical data, fitted model, and predictions with confidence intervals
+ggplot() +
+  # Historical data
+  geom_line(data = venice_max, aes(x = Year, y = Max_Sea_Level), color = "blue") +
+  geom_point(data = venice_max, aes(x = Year, y = Max_Sea_Level), color = "blue") +
+  # Fitted linear model for the prediction period
+  geom_line(data = pred_df, aes(x = Year, y = fit), color = "red", linetype = "dashed") +
+  # Confidence intervals as a ribbon
+  geom_ribbon(data = pred_df, aes(x = Year, ymin = lwr, ymax = upr), alpha = 0.2, fill = "red") +
+  labs(title = "Yearly Maximum Sea Levels: Historical Data and Predictions (2010–2022)",
+       x = "Year", y = "Max Sea Level (cm)") +
+  theme_minimal()
+```
+
+The linear model shows the histrocial trend into the future. Depending on the fit, the prediction might show a contiuing increase/decrease in yearly maximum sea levels. Using a 95% confidence interval, we can see that the interval tend to widen, which might reflect some uncertainties in the predictions.
+
+## Question c)
+
+```{r}
+# These are the individual observations (from the full dataset) with sea levels > 140 cm.
+observed_high <- niveau %>% filter(Wert > 140)
+
+ggplot() +
+  # Historical yearly maximum sea levels (1940–2009)
+  geom_line(data = venice_max, aes(x = Year, y = Max_Sea_Level), color = "blue") +
+  geom_point(data = venice_max, aes(x = Year, y = Max_Sea_Level), color = "blue") +
+  
+  # Predicted values for 2010–2022 with a dashed line.
+  geom_line(data = pred_df, aes(x = Year, y = fit), color = "red", linetype = "dashed") +
+  
+  # Confidence interval for predictions as a shaded ribbon.
+  geom_ribbon(data = pred_df, aes(x = Year, ymin = lwr, ymax = upr), fill = "red", alpha = 0.2) +
+  
+  # Observed sea level values greater than 140 cm, plotted as distinct points.
+  geom_point(data = observed_high, aes(x = Year, y = Wert), color = "darkgreen", shape = 4, size = 3) +
+  
+  labs(title = "Yearly Maximum Sea Levels and Observations > 140 cm",
+       subtitle = "Historical (1940–2009), Predicted (2010–2022), and Individual Observations > 140 cm",
+       x = "Year", y = "Sea Level (cm)") +
+  theme_minimal()
+```
+
+## Question d)
+
+```{r}
+# (a) GEV with constant parameters
+gev_const <- fevd(venice_max$Max_Sea_Level, data = venice_max, type = "GEV", method = "MLE")
+summary(gev_const)
+
+# (b) GEV with time-varying location (linear in Year)
+gev_tv <- fevd(venice_max$Max_Sea_Level, data = venice_max, type = "GEV", method = "MLE",
+               location.fun = ~ Year)
+summary(gev_tv)
+
+# 3. Likelihood Ratio Test
+LRT_stat <- 2 * (logLik(gev_tv) - logLik(gev_const))
+p_val <- 1 - pchisq(LRT_stat, df = 1)
+cat("LRT statistic:", LRT_stat, "\n", "p-value:", p_val, "\n")
+
+# 4. Diagnostic Plots
+par(mfrow = c(2, 2))
+plot(gev_const)
+title("Constant-Param GEV", outer = TRUE)
+
+par(mfrow = c(2, 2))
+plot(gev_tv)
+title("Time-Varying Location GEV", outer = TRUE)
+par(mfrow = c(1, 1))  # reset
+
+# 5. Compute 13-year Return Levels for 2010–2022
+future_data <- data.frame(Year = 2010:2022)
+coef_tv <- coef(gev_tv)
+# For GEV: mu(Year) = β0 + β1*Year, scale = σ, shape = ξ
+future_data <- future_data %>%
+  mutate(
+    mu = coef_tv["locationIntercept"] + coef_tv["locationYear"] * Year,
+    sigma = coef_tv["scale"],
+    xi = coef_tv["shape"],
+    R13 = mu - (sigma / xi) * (1 - (-log(1 - 1/13))^(-xi))
+  )
+
+print(future_data)
+```
+
+
+
+
+# Part 2 - Nuclear Reactors
+
+## Question a)
+
+```{r}
+
+```
+
