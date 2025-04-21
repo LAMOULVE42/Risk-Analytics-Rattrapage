@@ -14,7 +14,10 @@ packages <- c(
   "forecast",
   "fGarch",
   "TTR",
-  "parallel"
+  "parallel",
+  "tidyverse",
+  "lubridate",
+  "extRemes"
 )
 
 # Function that install the packages if not already installed on your computer
