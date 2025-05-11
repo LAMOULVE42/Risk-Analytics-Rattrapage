@@ -17,7 +17,12 @@ packages <- c(
   "parallel",
   "tidyverse",
   "lubridate",
-  "extRemes"
+  "extRemes",
+  "VGAM",
+  "ismev",
+  "evd",
+  "dplyr",
+  "evir"
 )
 
 # Function that install the packages if not already installed on your computer
