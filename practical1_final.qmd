@@ -57,7 +57,7 @@ As a result, we can see that for SP500, the p-value is 0.9044 and for CAC40, the
 
 > Create a function to transform the daily stock indices into their daily negative log returns counterparts. Plot the latter series and assess their stationarity. To compare the series, also plot the negative log returns on a common scale to all indices.
 
-```{r pressure, echo=FALSE, warning=FALSE}
+```{r financial1, echo=FALSE, warning=FALSE}
 # Function to compute negative log returns
 log_neg_returns <- function(series) {
   ret <- -diff(log(series))
@@ -91,7 +91,7 @@ As both plots seem to not show trends, periodic cycles and a stable variance, th
 
 > Draw histograms of the negative log returns and compare them to the Normal distribution. What do you observe?
 
-```{r pressure1, echo=FALSE, warning=FALSE}
+```{r financial2, echo=FALSE, warning=FALSE}
 library(ggplot2)
 
 # Histogram of SP500 negative log returns
@@ -109,7 +109,7 @@ Both histograms have bell-shaped distributions, but are not perfectly aligned wi
 
 > Check the normality assumption of the negative log returns using QQ-plots. What is your conclusion?
 
-```{r pressure2, echo=FALSE, warning=FALSE}
+```{r financial3, echo=FALSE, warning=FALSE}
 # QQ-plot SP500
 qqnorm(sp500_ret, main="QQ-plot SP500 Returns")
 qqline(sp500_ret, col="blue")
@@ -125,7 +125,7 @@ On both the lower and upper extremes, the points deviate from the line, showing 
 
 > Formally test the normality assumption of the negative log returns using an Anderson-Darling testing procedure. Do you reject the Normal hypothesis?
 
-```{r pressure3, echo=FALSE, warning=FALSE}
+```{r financial4, echo=FALSE, warning=FALSE}
 # ADF test for normality for negative log returns
 ad_sp500 <- ad.test(sp500_ret)
 ad_cac40 <- ad.test(cac40_ret)
@@ -141,7 +141,7 @@ As both p-values are lower than 0.05 (both at 2.2e-16), we reject the null hypot
 
 > Use the fitdistr() function from the MASS package in order to obtain the (maximum-likelihood estimated) parameters of distributions you could imagine for the negative log returns. Try to fit at least two diﬀerent distributions on the data and, using an information criteria (such as the AIC), decide which distributional framework fits best for each of the series.
 
-```{r pressure4, echo=FALSE, warning=FALSE}
+```{r financial5, echo=FALSE, warning=FALSE}
 # Fitting a normal distribution
 fit_norm_sp500 <- fitdistr(sp500_ret, "normal")
 fit_norm_cac40 <- fitdistr(cac40_ret, "normal")
@@ -170,7 +170,7 @@ As the Student model yields lower AIC than the normal model, it indicates a bett
 
 > If this has not been done in (f), fit a t-distribution to the negative log returns using fitdistr(). Using a QQ-plot for each of the series, decide whether the fit is better than with a Normal distribution, based on your answer in (d).
 
-```{r pressure5, echo=FALSE, warning=FALSE}
+```{r financial6, echo=FALSE, warning=FALSE}
 # QQ-plot for SP500 using a t-distribution
 qqplot(rt(length(sp500_ret), df=fit_t_sp500$estimate["df"]), sp500_ret, main="QQ-plot SP500 vs t-Distribution")
 qqline(sp500_ret, col="blue")
@@ -188,7 +188,7 @@ Despite some deviations from points in the extremes, the QQ-plots confirm that a
 
 > Plot the ACF of all the series in Part 1 (i.e. the raw series as well as the negative log returns). What do you observe?
 
-```{r pressure6, echo=FALSE, warning=FALSE}
+```{r financial7, echo=FALSE, warning=FALSE}
 par(mfrow = c(2, 2))
 
 # ACF for the raw and negative log returns for SP500
@@ -206,7 +206,7 @@ The raw series show high autocorrelation at all lags, implying non-stationarity.
 
 > Use a Ljung-Box procedure to formally test for (temporal) serial dependence in the series. What is your conclusion?
 
-```{r pressure7, echo=FALSE, warning=FALSE}
+```{r financial8, echo=FALSE, warning=FALSE}
 # Ljung-Box test for SP500
 Box.test(sp500, lag=20, type="Ljung-Box")
 Box.test(sp500_ret, lag=20, type="Ljung-Box")
@@ -222,7 +222,7 @@ Looking at the raw series for both CAC40 and SP500, we obtain a p-value that is 
 
 > Propose ARIMA models for each of the negative log returns series, based on visualisation tools (e.g. ACF and PACF). Select an ARIMA model using auto.arima() (forecast package) to each of the negative log returns series. Comment on the diﬀerence. Assess the residuals of the resulting models.
 
-```{r pressure8, echo=FALSE, warning=FALSE}
+```{r financial9, echo=FALSE, warning=FALSE}
 par(mfrow = c(1, 2))
 
 # Fit ARIMA models using auto.arima()
@@ -252,7 +252,7 @@ The ACF & PACF for both SP500 & CAC40 negative log returns show almost no signif
 
 > Assess the residuals of the resulting models from (c), both their raw values and their absolute values, through visual tools (such as the ACF) and formal tests (e.g. Ljung-Box). What do you conclude about the independence assumption?
 
-```{r pressure9, echo=FALSE, warning=FALSE}
+```{r financial10, echo=FALSE, warning=FALSE}
 par(mfrow = c(1, 2))
 acf(residuals(arima_sp500))
 acf(residuals(arima_cac40))
@@ -264,7 +264,7 @@ The independence assumption holds for the raw residuals but not for the volatili
 
 > Plot the volatility of the raw series of indices. What is your conclusion on the homoscedasticity assumption?
 
-```{r pressure10, echo=FALSE, warning=FALSE}
+```{r financial11, echo=FALSE, warning=FALSE}
 # Calculate volatility & plots
 volatility <- function(series) {
   return(runSD(series, n=30))
@@ -277,52 +277,122 @@ The data shows heteroskedasticity, as the volatility (or variance) is not consta
 
 ## Question f)
 
+> Fit GARCH models to the negative log returns of each series with both standardised and skewed t-distributions, with order (1, 1), using the garchFit() function from the fGarch library. Assess the quality of the fit by evaluating the residuals.
+
+```{r financial12, echo=FALSE, warning=FALSE}
+# SP500 & CAC40 standardized t-distribution
+garch_sp500_t <- garchFit(~ garch(1, 1), data = sp500_ret, cond.dist = "std", trace = FALSE)
+garch_cac40_t <- garchFit(~ garch(1, 1), data = cac40_ret, cond.dist = "std", trace = FALSE)
+
+# SP500 & CAC40 skewed t-distribution
+garch_sp500_skt <- garchFit(~ garch(1, 1), data = sp500_ret, cond.dist = "sstd", trace = FALSE)
+garch_cac40_skt <- garchFit(~ garch(1, 1), data = cac40_ret, cond.dist = "sstd", trace = FALSE)
+
+summary(garch_sp500_t)
+summary(garch_sp500_skt)
+summary(garch_cac40_t)
+summary(garch_cac40_skt)
+
+# Residual plots SP500
+par(mfrow = c(2, 2))
+ts.plot(residuals(garch_sp500_t), main = "Residuals: SP500 - t", col = "blue")
+acf(residuals(garch_sp500_t), main = "ACF Residuals: SP500 - t", col = "blue")
+
+ts.plot(residuals(garch_sp500_skt), main = "Residuals: SP500 - skewed t", col = "blue")
+acf(residuals(garch_sp500_skt), main = "ACF Residuals: SP500 - skewed t", col = "blue")
+
+# Residual plots CAC40
+par(mfrow = c(2, 2))
+ts.plot(residuals(garch_cac40_t), main = "Residuals: CAC40 - t", col = "red")
+acf(residuals(garch_cac40_t), main = "ACF Residuals: CAC40 - t", col = "red")
+
+ts.plot(residuals(garch_cac40_skt), main = "Residuals: CAC40 - skewed t", col = "red")
+acf(residuals(garch_cac40_skt), main = "ACF Residuals: CAC40 - skewed t", col = "red")
+
+# Ljung-Box Test on Garch residuals
+Box.test(residuals(garch_sp500_t), lag = 20, type = "Ljung-Box")
+Box.test(residuals(garch_sp500_skt), lag = 20, type = "Ljung-Box")
+
+Box.test(residuals(garch_cac40_t), lag = 20, type = "Ljung-Box")
+Box.test(residuals(garch_cac40_skt), lag = 20, type = "Ljung-Box")
+```
+
+By evaluating the residuals, we observe that for both SP500 and CAC40, the p-values are below 0.05, meaning there is still autocorrelation and residuals are not white noise. Looking at the AIC/BIC and the log-likelihood, it seems that the skewed distribution is slightly better for both models especially for CAC40. Thus, the Garch models are a good start but can be improved.
+
+## Question g)
+
 > Residual serial correlation can be present when fitting a GARCH directly on the negative log returns. Hence, in order to circumvent this problem, it is possible to use the following two-step approach:
 • fit an ARMA(p,q) on the negative log returns;
 • fit a GARCH(1,1) on the residuals of the ARMA(p,q) fit.
 Proceed with the above recipe. Assess the quality of the above fit.
 
-```{r pressure11, echo=FALSE, warning=FALSE}
-# Garch fitting on negative log returns
-garch_sp500 <- garchFit(~ garch(1,1), data=sp500_ret, trace=FALSE)
-garch_cac40 <- garchFit(~ garch(1,1), data=cac40_ret, trace=FALSE)
+To fit an ARMA(p,q) on the negative log returns:
 
-summary(garch_sp500)
-summary(garch_cac40)
+```{r financial13, echo=FALSE, warning=FALSE}
+# Select best ARMA model
+arma_sp500 <- auto.arima(sp500_ret, max.p=5, max.q=5, seasonal=FALSE, ic="aic")
+arma_cac40 <- auto.arima(cac40_ret, max.p=5, max.q=5, seasonal=FALSE, ic="aic")
+
+# Get residuals
+res_sp500 <- residuals(arma_sp500)
+res_cac40 <- residuals(arma_cac40)
 ```
 
-By applying a GARCH model on the ARMA model, the mean and volatility dynamics are well captured. The GARCH parameters are highly significant for both series. The final models for both SP500 and CAC40 effectively remove serial correlation from the residuals and capture the volatility clustering, making them appropriate for modeling on negative log returns.
+To fit GARCH(1,1) on the ARMA residuals:
 
-## Question g)
-
-> Use the garchAuto.R script in order to fit a GARCH on the residuals of the ARMA(p,q) from (g). Assess the quality of the fit.
-
-```{r}
-source(here::here("data", "Practical1", "garchAuto.R"))
-
-# Fit ARMA models to the negative log returns
-arma_sp500 <- auto.arima(sp500_ret)
-arma_cac40 <- auto.arima(cac40_ret)
-
-# Extract the ARMA residuals
-resid_sp500 <- residuals(arma_sp500)
-resid_cac40 <- residuals(arma_cac40)
-
-# Call the garchAuto() function on the ARMA residuals to fit a GARCH(1,1) model
-garch_model_sp500 <- garchAuto(resid_sp500)
-garch_model_cac40 <- garchAuto(resid_cac40)
-
-# Assess the quality of the GARCH fits
-summary(garch_model_sp500)
-summary(garch_model_cac40)
-
-# Extract the residuals from the GARCH models
-garch_resid_sp500 <- residuals(garch_model_sp500)
-garch_resid_cac40 <- residuals(garch_model_cac40)
-
-# Now apply checkresiduals() to the residuals
-checkresiduals(garch_resid_sp500)
-checkresiduals(garch_resid_cac40)
+```{r financial14, echo=FALSE, warning=FALSE}
+garch_sp500_arma_res <- garchFit(~ garch(1, 1), data = res_sp500, cond.dist = "sstd", trace = FALSE)
+garch_cac40_arma_res <- garchFit(~ garch(1, 1), data = res_cac40, cond.dist = "sstd", trace = FALSE)
 ```
 
-The garchAuto() function searches for the mean over a range of ARMA orders combined ith a fixed GARCH(1,1) for the variance and then selects the best model based on AIC. The GARCH parameters seems significant. The checkresiduals() function shows that the standardized residuals have no significatn serial correlation, meaning that the mean and volatility are well modeled. So, applying the garchAuto() fit results in the models providing a good fit. The residuals behave like white noise, the volatility is well captured and there is no remains of autocorrelation.
+To assess the fit quality:
+
+```{r financial15, echo=FALSE, warning=FALSE}
+# Show summaries
+summary(garch_sp500_arma_res)
+summary(garch_cac40_arma_res)
+
+# Residual plots
+par(mfrow = c(2, 2))
+acf(residuals(garch_sp500_arma_res), main = "ACF Residuals: SP500 ARMA & GARCH")
+acf(residuals(garch_cac40_arma_res), main = "ACF Residuals: CAC40 ARMA & GARCH")
+
+# Ljung-Box tests on residuals
+Box.test(residuals(garch_sp500_arma_res), lag = 20, type = "Ljung-Box")
+Box.test(residuals(garch_cac40_arma_res), lag = 20, type = "Ljung-Box")
+```
+
+For SP500, we observe that the ARMA + GARCH fit improves the model quality quite clearly: higher log-likelihood, lower AIC and no autocorrelation
+
+On the contrary, CAC40 has an identical log-likelihood and AIC as before, with a p-value still too low (so still some significant autocorrelation). It could be good to tune ARMA better or to try another GARCH variant.
+
+## Question h)
+
+> Use the garchAuto.R script in order to fit a GARCH on the residuals of the ARMA(p,q) from
+(g). Assess the quality of the fit.
+
+```{r financial16, echo=FALSE, warning=FALSE}
+# Source the garchAuto.R file
+source("data/Practical1/garchAuto.R")
+
+# Fit best ARMA+GARCH model on SP500 residuals
+best_garch_sp500 <- garchAuto(res_sp500, trace=TRUE)
+
+# Fit best ARMA+GARCH model on CAC40 residuals
+best_garch_cac40 <- garchAuto(res_cac40, trace=TRUE)
+
+# View model summaries
+summary(best_garch_sp500)
+summary(best_garch_cac40)
+
+# Check residual diagnostics
+par(mfrow = c(2, 2))
+acf(residuals(best_garch_sp500), main = "ACF Residuals: SP500 Auto GARCH")
+acf(residuals(best_garch_cac40), main = "ACF Residuals: CAC40 Auto GARCH")
+
+# Ljung-Box test
+Box.test(residuals(best_garch_sp500), lag=20, type="Ljung-Box")
+Box.test(residuals(best_garch_cac40), lag=20, type="Ljung-Box")
+```
+
+As a result, both SP500 and CAC40 now have the best fit compared to the previous fits we have tried. Residuals are now white noise for both indices (so no more autocorrelation) and volatility are well-captured.
