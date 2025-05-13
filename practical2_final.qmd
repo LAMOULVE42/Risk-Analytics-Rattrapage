@@ -287,34 +287,37 @@ Using a Peaks-over-Threshold approach, we set a threshold above which the values
 with clustering of the daily water levels?
 
 ```{r}
-# Add a binary column for exceedances
-niveau$exceed <- niveau$Wert > threshold
-
-# Identify clusters using a run length (e.g., 3 days)
+# Set time gap for declustering (e.g., 3 days)
 run_length <- 3
-cluster_id <- 0
-last_exceed_day <- -Inf
-niveau$cluster <- NA
 
-for (i in 1:nrow(niveau)) {
-  if (niveau$exceed[i]) {
-    if (as.numeric(niveau$Zeitstempel[i] - last_exceed_day) > run_length) {
-      cluster_id <- cluster_id + 1
-    }
-    niveau$cluster[i] <- cluster_id
-    last_exceed_day <- niveau$Zeitstempel[i]
+# Identify dates of exceedances
+exceed_dates <- niveau$Zeitstempel[niveau$Wert > threshold]
+
+# Sort dates
+exceed_dates <- sort(exceed_dates)
+
+# Initialize clusters
+clusters <- list()
+current_cluster <- c(exceed_dates[1])
+
+for (i in 2:length(exceed_dates)) {
+  if (as.numeric(exceed_dates[i] - tail(current_cluster, 1)) <= run_length) {
+    current_cluster <- c(current_cluster, exceed_dates[i])
+  } else {
+    clusters <- append(clusters, list(current_cluster))
+    current_cluster <- c(exceed_dates[i])
   }
 }
+clusters <- append(clusters, list(current_cluster))
 
-# Keep only one exceedance per cluster (the max)
-library(dplyr)
-declustered <- niveau %>%
-  filter(!is.na(cluster)) %>%
-  group_by(cluster) %>%
-  slice_max(Wert)
+# Extract cluster maxima
+cluster_maxima <- sapply(clusters, function(cluster_dates) {
+  max(niveau$Wert[niveau$Zeitstempel %in% cluster_dates])
+})
 
-# Check how many independent extreme events you have now
-nrow(declustered)
+# Results
+cat("Number of exceedances before declustering:", length(exceedances), "\n")
+cat("Number of cluster maxima (after declustering):", length(cluster_maxima), "\n")
 ```
 
 Clustering extremes uses runs methods. We keep only one peak per cluster, which makes the exceedances more independent and suitable for modelling.
@@ -328,28 +331,55 @@ Note: take care to compute the return level in yearly terms.
 Using the POT approach:
 
 ```{r}
-# Fit GPD on raw values (not exceedances!)
-gpd_model_raw <- gpd(niveau$Wert, threshold = threshold)
+# Fit GPD model
+fit <- gpd.fit(cluster_maxima, threshold)
 
-# Estimate number of years
-n_years <- as.numeric(difftime(max(niveau$Zeitstempel), min(niveau$Zeitstempel))) / 365
+# Basic info
+sigma <- fit$mle[1]
+xi <- fit$mle[2]
+cov_mat <- fit$cov
 
-# Rate of exceedances (without declustering)
-rate_raw <- sum(niveau$Wert > threshold) / n_years
+# Estimate exceedance rate per year
+years <- as.numeric(difftime(max(niveau$Zeitstempel), min(niveau$Zeitstempel), units = "days")) / 365.25
+lambda <- length(cluster_maxima) / years
 
-# Return levels
-return_periods <- c(50, 100)
-return_levels_raw <- qgpd(1 - 1 / (return_periods * rate_raw),
-                          xi = gpd_model_raw$par.ests["xi"],
-                          beta = gpd_model_raw$par.ests["beta"]) + threshold
+# Return level function
+return_level <- function(T, sigma, xi) {
+  threshold + (sigma / xi) * ((T * lambda)^xi - 1)
+}
+
+# Simulate 1000 sets of parameters
+set.seed(1)
+params <- mvrnorm(1000, mu = c(sigma, xi), Sigma = cov_mat)
+
+# Calculate return levels
+rl_50 <- apply(params, 1, function(p) return_level(50, p[1], p[2]))
+rl_100 <- apply(params, 1, function(p) return_level(100, p[1], p[2]))
+
+# Get point estimates
+rl_50_est <- return_level(50, sigma, xi)
+rl_100_est <- return_level(100, sigma, xi)
+
+# Confidence intervals
+ci_50 <- quantile(rl_50, c(0.025, 0.975))
+ci_100 <- quantile(rl_100, c(0.025, 0.975))
+
+# Print nicely
+cat("50-year return level:", round(rl_50_est, 2), "\n")
+cat("95% CI:", round(ci_50[1], 2), "-", round(ci_50[2], 2), "\n\n")
+
+cat("100-year return level:", round(rl_100_est, 2), "\n")
+cat("95% CI:", round(ci_100[1], 2), "-", round(ci_100[2], 2), "\n")
 ```
 
-FAUX!!
+The threshold is the 95th percentile to capture the extremes, have a balance between bias and variance and to have an adequate sample size to fit a GPD
 
+## Question f)
 
+> Explain the drawbacks and advantages of using a block maxima method instead of the one used
+in c)-e).
 
-
-
+The Block Maxima method selects the maximum observation from a given time interval, but uses only one observation per block which leads to an inefficient use of the data. The POT approach uses all the values above the given threshold and handles clustering well via declustering. It is more efficient and flexible especially when extreme events happen in clusters. Thus, the POT approach is more precise and provides more information on the behavior of extreme events.
 
 # Part 3 - Night temperatures in Lausanne
 
@@ -465,6 +495,8 @@ nightmin$month <- month(nightmin$date)
 winter_nightmin <- subset(nightmin, month %in% c(11, 12, 1, 2))
 ```
 
+Here, we want to analyze cold extremes.
+
 ```{r}
 # Apply negative to the temperatures for cold extremes
 winter_nightmin$neg_night_min <- -winter_nightmin$night.min
@@ -473,26 +505,28 @@ winter_nightmin$neg_night_min <- -winter_nightmin$night.min
 winter_temps <- na.omit(winter_nightmin$neg_night_min)
 
 # Set threshold at 95th percentile
-threshold <- quantile(winter_temps, 0.95)
+threshold_winter <- quantile(winter_temps, 0.95)
 
 # Create exceedance indicator
-exceed_winter <- winter_temps > threshold
+exceed_winter <- winter_temps > threshold_winter
 
 # Run-length encoding to find clusters
-rle_exceed <- rle(exceed_winter)
-cluster_lengths <- rle_exceed$lengths[rle_exceed$values == TRUE]
+rle_exceed_winter <- rle(exceed_winter)
+cluster_lengths_winter <- rle_exceed_winter$lengths[rle_exceed_winter$values == TRUE]
 
 # Compute extremal index
-num_exceedances <- sum(exceed_winter, na.rm = TRUE)
-num_clusters <- length(cluster_lengths)
-extremal_index <- num_clusters / num_exceedances
+num_exceedances_winter <- sum(exceed_winter, na.rm = TRUE)
+num_clusters_winter <- length(cluster_lengths_winter)
+extremal_index_winter <- num_clusters_winter / num_exceedances_winter
 
-print(paste("Extremal Index (θ):", round(extremal_index, 3)))
+print(paste("Extremal Index (θ):", round(extremal_index_winter, 3)))
 ```
+
+We apply the negative to the winter values to treat the extremely low values as high values for modelling purposes. We then do an extremal index and we obtain 0.402, lower than 1, indicating clustering.
 
 ```{r}
 # Decluster the series
-declustered_wint <- decluster(winter_temps, threshold = threshold)
+declustered_wint <- decluster(winter_temps, threshold = threshold_winter)
 
 # Plot line of declustered values
 plot(declustered_wint, type = "l", col = "blue", lwd = 2,
@@ -500,21 +534,18 @@ plot(declustered_wint, type = "l", col = "blue", lwd = 2,
      xlab = "Index (declustered events)", ylab = "Negated Temperature (°C)")
 ```
 
+We then keep only one value per cluster.
+
 ```{r}
 # Fit GPD to raw data
-gpd_raw_wint <- fevd(winter_temps, threshold = threshold, type = "GP", method = "MLE")
+gpd_raw_wint <- fevd(winter_temps, threshold = threshold_winter, type = "GP", method = "MLE")
 
 # Fit GPD to declustered data
-gpd_declust_wint <- fevd(declustered, threshold = threshold, type = "GP", method = "MLE")
-```
+gpd_declust_wint <- fevd(declustered, threshold = threshold_winter, type = "GP", method = "MLE")
 
-```{r}
 plot(gpd_raw_wint, main = "Raw Data - GPD Fit (Negated Winter Min Temps)")
-```
-
-```{r}
 plot(gpd_declust_wint, main = "Declustered Data - GPD Fit (Negated Winter Min Temps)")
 ```
 
-
-A EXPLIQUER
+We fit a GPD to both raw and declustered data and assess the quality of the GPD fit for both data.
+The GPD fit to the raw data shows a reasonably good performance compared to the decluster fit. The latter is due to the reduced number of data points after declustering.
