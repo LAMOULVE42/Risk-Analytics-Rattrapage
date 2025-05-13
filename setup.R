@@ -22,7 +22,8 @@ packages <- c(
   "ismev",
   "evd",
   "dplyr",
-  "evir"
+  "evir",
+  "POT"
 )
 
 # Function that install the packages if not already installed on your computer
