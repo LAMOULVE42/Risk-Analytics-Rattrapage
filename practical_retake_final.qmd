@@ -1,0 +1,26 @@
+---
+title: Pratical 1 and 2 - Retake
+date: today
+date-format: long
+author: Melvil Deleage & Jeff Macaraeg
+toc: true
+format:
+  pdf:
+    code-fold: false
+    toc: true
+    code-block-border-left: "#0d6efd"
+    code-block-bg: true
+    highlight-style: github
+    geometry: margin = 1.5cm
+---
+
+  {{< pagebreak >}}
+
+# Introduction
+
+This documents is the annex to our final report for group 1. It contains the full code for the practicals 1 and 2 of the retake with the results and some discussions. This allows anyone to reproduce our results and to understand the code we used.
+
+{{< pagebreak >}}
+
+```{r child = c("setup.R", "practical1_final.qmd", "practical2_final.qmd")}
+```

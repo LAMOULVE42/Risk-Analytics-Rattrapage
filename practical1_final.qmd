@@ -27,7 +27,7 @@ source(here::here("setup.R"))
 
 > Read in the data. Then, assess the stationarity of the (raw) stock indices.
 
-```{r setup1, include=FALSE, warning=FALSE}
+```{r setup1, echo=FALSE, warning=FALSE}
 # Load SP500 & CAC40 data
 data("sp500")
 data("cac40")
@@ -44,6 +44,7 @@ adf_cac40 <- adf.test(cac40_ts)
 print(adf_sp500)
 print(adf_cac40)
 
+par(mfrow = c(1, 2))
 # Plot the SP500 index
 plot(sp500, type = "l", col = "blue", main = "SP500 Index", ylab = "Index Value")
 
@@ -92,8 +93,6 @@ As both plots seem to not show trends, periodic cycles and a stable variance, th
 > Draw histograms of the negative log returns and compare them to the Normal distribution. What do you observe?
 
 ```{r financial2, echo=FALSE, warning=FALSE}
-library(ggplot2)
-
 # Histogram of SP500 negative log returns
 hist(sp500_ret, probability=TRUE, main="Histogram of SP500 Returns", col="blue")
 curve(dnorm(x, mean=mean(sp500_ret), sd=sd(sp500_ret)), col="red", add=TRUE)
@@ -189,7 +188,7 @@ Despite some deviations from points in the extremes, the QQ-plots confirm that a
 > Plot the ACF of all the series in Part 1 (i.e. the raw series as well as the negative log returns). What do you observe?
 
 ```{r financial7, echo=FALSE, warning=FALSE}
-par(mfrow = c(2, 2))
+par(mfrow = c(2, 2), mar = c(4, 4, 4, 2))
 
 # ACF for the raw and negative log returns for SP500
 acf(sp500, main = "ACF of SP500 Raw Series", col = "blue")
@@ -353,7 +352,7 @@ summary(garch_sp500_arma_res)
 summary(garch_cac40_arma_res)
 
 # Residual plots
-par(mfrow = c(2, 2))
+par(mfrow = c(1, 2))
 acf(residuals(garch_sp500_arma_res), main = "ACF Residuals: SP500 ARMA & GARCH")
 acf(residuals(garch_cac40_arma_res), main = "ACF Residuals: CAC40 ARMA & GARCH")
 
@@ -368,8 +367,7 @@ On the contrary, CAC40 has an identical log-likelihood and AIC as before, with a
 
 ## Question h)
 
-> Use the garchAuto.R script in order to fit a GARCH on the residuals of the ARMA(p,q) from
-(g). Assess the quality of the fit.
+> Use the garchAuto.R script in order to fit a GARCH on the residuals of the ARMA(p,q) from (g). Assess the quality of the fit.
 
 ```{r financial16, echo=FALSE, warning=FALSE}
 # Source the garchAuto.R file
@@ -386,7 +384,7 @@ summary(best_garch_sp500)
 summary(best_garch_cac40)
 
 # Check residual diagnostics
-par(mfrow = c(2, 2))
+par(mfrow = c(1, 2))
 acf(residuals(best_garch_sp500), main = "ACF Residuals: SP500 Auto GARCH")
 acf(residuals(best_garch_cac40), main = "ACF Residuals: CAC40 Auto GARCH")
 

@@ -4,26 +4,20 @@ options(repos = c(CRAN = "https://cloud.r-project.org"))
 # load the required packages and install them if they are not.
 packages <- c(
   "here",
-  "QRM",
   "tseries",
   "nortest",
-  "stats",
   "MASS",
-  "ggplot2",
-  "fpp3",
   "forecast",
-  "fGarch",
   "TTR",
-  "parallel",
-  "tidyverse",
-  "lubridate",
-  "extRemes",
+  "fGarch",
   "VGAM",
-  "ismev",
-  "evd",
   "dplyr",
-  "evir",
-  "POT"
+  "ggplot2",
+  "extRemes",
+  "ismev",
+  "tibble",
+  "purrr",
+  "stats"
 )
 
 # Function that install the packages if not already installed on your computer

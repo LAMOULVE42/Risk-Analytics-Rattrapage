@@ -29,7 +29,7 @@ The `venice90` dataset can be found in the `VGAM` package.
 
 > Read in the data. Extract and represent the yearly max values from 1940 to 2009. What do you observe ?
 
-```{r}
+```{r venice1, echo=FALSE, warning=FALSE}
 library(VGAM)
 data(venice90)
 
@@ -43,10 +43,12 @@ yearly_max <- venice90_df %>%
 
 # Plot the yearly maximum sea levels
 ggplot(yearly_max, aes(x = year, y = max_sealevel)) +
-  geom_line(color = "blue", size = 1) +
-  geom_point(color ="red", size =1)
-  labs(x = "Year", y = "Maximum Sea Level (cm)",
-       title = "Yearly Maximum Sea Levels in Venice (1940-2009)") +
+  geom_line(color = "blue") +
+  labs(
+    x = "Year",
+    y = "Maximum Sea Level (cm)",
+    title = "Yearly Maximum Sea Levels in Venice (1940–2009)"
+  ) +
   theme_minimal()
 ```
 
@@ -56,13 +58,13 @@ We can observe some variability over the years and a slight upward trend, so the
 
 > We are end of 2009 and would like to predict the yearly maximum values over the next 13 years (from 2010 to 2022). A naive approach consists of fitting a linear model on the observed yearly maxima and predict their values for 2010–2022. Proceed to this prediction and provide confidence intervals.
 
-```{r}
+```{r venice2, echo=FALSE, warning=FALSE}
 # Fit linear model
 model <- lm(max_sealevel ~ year, data = yearly_max)
 
 # Predict for 2010–2022 with confidence intervals
 future_years <- data.frame(year = 2010:2022)
-pred <- predict(model, newdata = future_years, interval = "confidence", level = 0.95)
+pred <- predict(model, newdata = future_years, interval = "confidence", level = 0.99)
 
 # Show predictions
 cbind(future_years, pred)
@@ -73,7 +75,6 @@ pred_df <- cbind(future_years, as.data.frame(pred))
 # Plot observed and predicted with confidence intervals
 ggplot() +
   geom_line(data = yearly_max, aes(x = year, y = max_sealevel), color = "blue") +
-  geom_point(data = yearly_max, aes(x = year, y = max_sealevel), color = "red", size = 1) +
   geom_line(data = pred_df, aes(x = year, y = fit), color = "darkgreen") +
   geom_ribbon(data = pred_df, aes(x = year, ymin = lwr, ymax = upr), fill = "lightgreen", alpha = 0.4) +
   labs(x = "Year", y = "Maximum Sea Level (cm)",
@@ -81,13 +82,13 @@ ggplot() +
   theme_minimal()
 ```
 
-We used a confidence interval of 95% to predict for the years 2010 to 2022.
+We used a confidence interval of 99% to predict for the years 2010 to 2022.
 
 ## Question c)
 
 > Represent in the same graph the predicted yearly max values for the period 2010–2022, their pointwise confidence bounds and the observed values greater than 140 cm from the table below.
 
-```{r}
+```{r venice3, echo=FALSE, warning=FALSE}
 # Observed values > 140 cm
 extreme_vals <- yearly_max %>% filter(max_sealevel > 140)
 
@@ -95,7 +96,6 @@ extreme_vals <- yearly_max %>% filter(max_sealevel > 140)
 ggplot() +
   # Historical data
   geom_line(data = yearly_max, aes(x = year, y = max_sealevel), color = "blue") +
-  geom_point(data = yearly_max, aes(x = year, y = max_sealevel), color = "red", size = 1) +
   
   # Predictions
   geom_line(data = pred_df, aes(x = year, y = fit), color = "darkgreen") +
@@ -119,121 +119,263 @@ This plot provides all the necessary information, from the historical data in th
 
 > Fit a GEV a with constant parameters to the historical yearly max values. Fit a GEV with time varying location parameter. Compare the two embedded models using likelihood ratio test (LRT). Show diagnostic plots.
 
-```{r}
+```{r venice4, echo=FALSE, warning=FALSE}
+# Prepare the data (1940–2009), extract yearly maxima and center the year
+venice90_df <- as_tibble(venice90) %>%
+  filter(year >= 1940, year <= 2009) %>% 
+  group_by(year) %>% 
+  summarise(max_sealevel = max(sealevel), .groups = "drop") %>%
+  mutate(year_centered = year - mean(year))  # mean-centred year
+
+sea_levels <- venice90_df$max_sealevel                   # response
+year_covariate <- matrix(venice90_df$year_centered, ncol = 1)  # 1-column covariate matrix
+
+# Helper to rename GEV parameter estimates
+name_gev_par <- function(fit, location_trend = FALSE, scale_trend = FALSE, shape_trend = FALSE) {
+  names_vec <- c("location0")
+  if (location_trend) names_vec <- c(names_vec, "location1")
+  names_vec <- c(names_vec, "scale0")
+  if (scale_trend) names_vec <- c(names_vec, "scale1")
+  names_vec <- c(names_vec, "shape0")
+  if (shape_trend) names_vec <- c(names_vec, "shape1")
+
+  stopifnot(length(names_vec) == length(fit$mle))
+  names(fit$mle) <- names(fit$se) <- names_vec
+  fit
+}
+
 # Fit GEV with constant parameters
-gev_const <- vglm(max_sealevel ~ 1, gev, data = yearly_max)
+fit_const <- gev.fit(sea_levels, show = FALSE) |> name_gev_par()
 
-# Fit GEV with location changing over time (year)
-gev_time <- vglm(max_sealevel ~ year, gev, data = yearly_max)
+# Fit GEV with time-varying location (trend on location)
+fit_trend <- gev.fit(sea_levels, ydat = year_covariate, mul = 1, show = FALSE) |> name_gev_par(location_trend = TRUE)
 
-# Compare models
-lrtest(gev_const, gev_time)
+# Likelihood Ratio Test
+LRT <- 2 * (-fit_trend$nllh + fit_const$nllh)
+pval <- pchisq(LRT, df = 1, lower.tail = FALSE)
 
-# Plot diagnostic for time-varying model
-par(mfrow = c(2, 2))
-plot(gev_time, which = 1:4)
+# Select best model
+if (pval < 0.05) {
+  best_fit <- fit_trend
+  best_model <- "Time-varying Location"
+} else {
+  best_fit <- fit_const
+  best_model <- "Constant Parameters"
+}
+cat(sprintf("\n--- d) Likelihood-ratio test ---\nLRT = %.2f,  p = %.3f\nSelected model: %s\n",
+            LRT, pval, best_model))
+
+# Diagnostic plots
+par(mfrow = c(2,2)); gev.diag(fit_const); title("Constant Parameters", outer = TRUE)
+par(mfrow = c(2,2)); gev.diag(fit_trend); title("Time-varying Location", outer = TRUE)
 ```
 
-The model looks overall okay, despite having some outliers which might influence it. There are no major pattern nor heteroskedasticity.
+We fitted a constant and a time-varying model. The latter is better thanks to the low p-value and the log-likelihood of 11.62.The model looks overall okay, despite having some outliers which might influence it. There are no major pattern nor heteroskedasticity.
 
 ## Question e)
 
 > Add if necessary a time varying scale and or shape GEV parameter. Select the best model according to LRT.
 
-```{r}
-# Fit base model
-gev_loc <- vglm(max_sealevel ~ year, gev, data = yearly_max)
+```{r venice5, echo=FALSE, warning=FALSE}
+# Fit GEV models with additional time-varying parameters
+fit_loc_scale <- gev.fit(sea_levels, ydat = year_covariate, mul = 1, sigl = 1,
+                         show = FALSE) |> name_gev_par(location_trend = TRUE, scale_trend = TRUE)
 
-# Add time-varying scale
-gev_loc_scale <- vglm(max_sealevel ~ year, gev, data = yearly_max, form2 = ~ year)
+fit_loc_shape <- gev.fit(sea_levels, ydat = year_covariate, mul = 1, shl = 1,
+                         show = FALSE) |> name_gev_par(location_trend = TRUE, shape_trend = TRUE)
 
-# Add time-varying shape
-gev_loc_scale_shape <- vglm(max_sealevel ~ year, gev, data = yearly_max, form2 = ~ year, form3 = ~ year)
+fit_loc_scale_shape <- gev.fit(sea_levels, ydat = year_covariate, mul = 1, sigl = 1, shl = 1,
+                               show = FALSE) |> name_gev_par(location_trend = TRUE, scale_trend = TRUE, shape_trend = TRUE)
 
-# Compare models
-lrtest(gev_loc, gev_loc_scale)
-lrtest(gev_loc_scale, gev_loc_scale_shape)
+# Collect log-likelihoods for comparison
+log_likelihoods <- purrr::map_dbl(
+  list(fit_const, fit_trend, fit_loc_scale, fit_loc_shape, fit_loc_scale_shape),
+  \(fit) -fit$nllh
+)
+
+names(log_likelihoods) <- c("const", "location", "location+scale", "location+shape", "location+scale+shape")
+
+# Likelihood Ratio Test Table
+lrt_tbl <- tibble(
+  comparison = c("location vs const", 
+                 "location+scale vs location", 
+                 "location+shape vs location", 
+                 "location+scale+shape vs location+scale"),
+  LR = c(2 * (log_likelihoods["location"] - log_likelihoods["const"]),
+         2 * (log_likelihoods["location+scale"] - log_likelihoods["location"]),
+         2 * (log_likelihoods["location+shape"] - log_likelihoods["location"]),
+         2 * (log_likelihoods["location+scale+shape"] - log_likelihoods["location+scale"])),
+  df = 1,
+  p = pchisq(LR, df, lower.tail = FALSE)
+)
+
+print(lrt_tbl, digits = 3)
+
+# Start with location trend model as baseline
+best_fit <- fit_trend
+best_model_name <- "location"
+
+# Check if adding scale improves the model significantly
+if (lrt_tbl$p[2] < 0.05) {
+  best_fit <- fit_loc_scale
+  best_model_name <- "location+scale"
+}
+
+# If scale was not added, check if shape improves the model
+if (best_model_name == "location" && lrt_tbl$p[3] < 0.05) {
+  best_fit <- fit_loc_shape
+  best_model_name <- "location+shape"
+}
+
+# If both location and scale are in the model, check if adding shape improves it further
+if (best_model_name == "location+scale" && lrt_tbl$p[4] < 0.05) {
+  best_fit <- fit_loc_scale_shape
+  best_model_name <- "location+scale+shape"
+}
+
+cat("\nSelected model:", best_model_name, "\n")
 ```
 
-The LogLik values are identical, with the same Chisq and p-values. Thus, we don't have evidence that adding a time-varying scale or shape improves the model. So, the best model is the simplest one, the one with time-varying location only.
+The best model includes time-varying location and shape parameters. The addition of a time-varying scale is not necessary based on the LRT. This model provides the best fit and should be used for further analysis or prediction.
 
-## Question f)
+## Question f) + g)
 
-> Predict the 13-years return level, each year from 2010 to 2022.
+> f) Predict the 13-years return level, each year from 2010 to 2022.
+> g) Calculate confidence bands for these predictions.
 
-```{r}
-# Extract relevant coefficients
-intercept <- -392.1969947   # (Intercept):1
-beta <- 0.2568331           # year
-sigma <- 2.5776601          # (Intercept):2
+```{r venice6, echo=FALSE, warning=FALSE}
+# Extract parameter value by name (return 0 if not found)
+get_param <- function(params, name) {
+  ifelse(name %in% names(params), params[[name]], 0)
+}
 
-# Compute mu for 2010–2022
-years <- 2010:2022
-mu <- intercept + beta * years
+# Compute model parameters at covariate value z
+get_gev_parameters <- function(fit, z) {
+  p <- fit$mle
+  location0 <- get_param(p, "location0"); location1 <- get_param(p, "location1")
+  scale0    <- get_param(p, "scale0");    scale1    <- get_param(p, "scale1")
+  shape0    <- get_param(p, "shape0");    shape1    <- get_param(p, "shape1")
+  
+  list(
+    location = location0 + location1 * z,
+    scale    = scale0    + scale1    * z,
+    shape    = shape0    + shape1    * z
+  )
+}
 
-# 13-year return level using Gumbel formula
-T <- 13
-return_level <- mu - sigma * log(-log(1 - 1/T))
+# Compute 13-year return level using GEV parameters
+return_level <- function(location, scale, shape, m = 13) {
+  p <- 1 - 1/m
+  if (abs(shape) < 1e-6) {
+    location - scale * log(-log(p))  # Gumbel case
+  } else {
+    location + (scale / shape) * ((-log(p))^(-shape) - 1)
+  }
+}
 
-# Final table
-ret_level <- data.frame(year = years, return_level = return_level)
+# Delta method standard error for return level at covariate z
+return_level_se <- function(fit, z, m = 13) {
+  params <- get_gev_parameters(fit, z)
+  location <- params$location
+  scale    <- params$scale
+  shape    <- params$shape
+  p        <- 1 - 1/m
+
+  if (abs(shape) < 1e-6) {
+    dloc <- 1
+    dsca <- -log(-log(p))
+    dshp <- 0
+  } else {
+    A    <- (-log(p))^(-shape) - 1
+    dloc <- 1
+    dsca <- A / shape
+    dshp <- -scale / shape^2 * A + scale / shape * (-log(p))^(-shape) * log(-log(p))
+  }
+
+  # Gradient vector
+  grad <- setNames(numeric(length(fit$mle)), names(fit$mle))
+  grad["location0"] <- dloc
+  if ("location1" %in% names(grad)) grad["location1"] <- dloc * z
+  grad["scale0"]    <- dsca
+  if ("scale1" %in% names(grad)) grad["scale1"] <- dsca * z
+  grad["shape0"]    <- dshp
+  if ("shape1" %in% names(grad)) grad["shape1"] <- dshp * z
+
+  # Standard error via delta method
+  sqrt(as.numeric(t(grad) %*% fit$cov %*% grad))
+}
+
+# Predictions for 2010 to 2022
+years_future <- 2010:2022
+z_future     <- years_future - mean(venice90_df$year)  # center future years
+
+predicted_return_levels <- map2_dfr(years_future, z_future, \(year, z) {
+  params <- get_gev_parameters(best_fit, z)
+  rl     <- return_level(params$location, params$scale, params$shape, m = 13)
+  se     <- return_level_se(best_fit, z, m = 13)
+
+  tibble(
+    year = year,
+    return_level = rl,
+    lower_bound  = rl - qnorm(0.975) * se,
+    upper_bound  = rl + qnorm(0.975) * se
+  )
+})
+
+# Print the predictions
+print(as.data.frame(predicted_return_levels), digits = 5)
 ```
 
-## Question g)
-
-> Calculate confidence bands for these predictions.
-
-```{r}
-# Get standard errors se
-summary(gev_loc)@coef3
-
-# Standard errors (from summary)
-intercept_se <- 153.70667449
-beta_se <- 0.07784078
-
-# Compute standard error of mu
-se_mu <- sqrt(intercept_se^2 + (years^2) * beta_se^2)
-
-# 95% confidence bands
-lower <- return_level - 1.96 * se_mu
-upper <- return_level + 1.96 * se_mu
-
-# Final table
-ret_level <- data.frame(year = years,
-                        return_level = return_level,
-                        lower_95 = lower,
-                        upper_95 = upper)
-
-# View the result
-print(ret_level)
-```
+For each year from 2010 to 2022, the estimated 13-year return level gradually increases from approximately 147.78 cm to 149.16 cm. This indicates a slight upward trend in extreme sea level risk over time. The 95% confidence intervals range from about 137–158 cm in 2010 to 141–157 cm in 2022, showing that while uncertainty remains, the expected extremes are becoming higher. This trend supports the idea that extreme sea level events in Venice are becoming more likely and potentially more severe over time.
 
 ## Question h)
 
-> Represent in the same graph your predictions of the 13-years return levels, their pointwise
-confidence intervals, the predicted yearly max values from the linear model and the observed
-values greater than 140 cm from the table below.
+> Represent in the same graph your predictions of the 13-years return levels, their pointwise confidence intervals, the predicted yearly max values from the linear model and the observed values greater than 140 cm from the table below.
 
-```{r}
+```{r venice7, echo=FALSE, warning=FALSE}
+# Linear model forecasts 
+linear_forecast_df <- pred_df %>%
+  rename(lower_ci_linear = lwr, upper_ci_linear = upr, predicted_linear = fit)
 
+# Observed extremes > 140 cm
+extreme_values <- venice90_df %>% filter(max_sealevel > 140)
+
+# Plot observed, linear forecast, and GEV return levels
+ggplot() +
+  geom_line(data = venice90_df, aes(x = year, y = max_sealevel), color = "blue") +
+  geom_line(data = predicted_return_levels, aes(x = year, y = return_level), color = "red", linewidth = 1.1) +
+  geom_ribbon(data = predicted_return_levels, aes(x = year, ymin = lower_bound, ymax = upper_bound), fill = "pink", alpha = 0.3) +
+  geom_line(data = linear_forecast_df, aes(x = year, y = predicted_linear), color = "darkgreen") +
+  geom_ribbon(data = linear_forecast_df, aes(x = year, ymin = lower_ci_linear, ymax = upper_ci_linear), fill = "lightgreen", alpha = 0.25) +
+  geom_point(data = extreme_values, aes(x = year, y = max_sealevel), shape = 17, size = 2) +
+  labs(
+    x = "Year", y = "Sea Level (cm)",
+    title = "Venice Yearly Maxima, Forecasts, and 13-Year Return Levels",
+    subtitle = "Blue = Observed (1940–2009) · Green = Linear Model Forecast · Red = 13-Year Return Level (GEV) · Triangles = Observed > 140 cm"
+  ) +
+  theme_minimal()
 ```
 
+## Question i)
 
+> Broadly speaking, each year, there is a chance of 1/13 that the observed value is above the 13-years return level. Comment the results for both the linear model prediction and GEV approach. Note that 12 of the 20 events occurred in the 21st century.
+
+While both models provide useful insights, the linear model clearly underestimates extremes and provides overly narrow confidence intervals. The GEV approach, especially with time-varying parameters, is more suited for modeling extremes and gives a more realistic picture of sea level risk. However, even the GEV predictions fall short of the most recent high events, such as 2.04m in 2022, indicating that the system is non-stationary and that risk is increasing over time. This shift is emphasized by the concentration of extreme events in the 21st century, suggesting that return periods are shortening and that what was once a 13-year event may now be happening more frequently.
 
 # Part 2 - Nuclear Reactors
 
 ## Question a)
 
-> Read in the data. Display a time series plot of the water level across the data range and try to
-identify times of highest levels.
+> Read in the data. Display a time series plot of the water level across the data range and try to identify times of highest levels.
 
-```{r}
+```{r nuclear1, echo=FALSE, warning=FALSE}
 # Load the Rdata file
 load("data/Practical2/niveau.Rdata")
 
 # Convert Zeitstempel to Date
 niveau$Zeitstempel <- as.Date(niveau$Zeitstempel)
 
+par(mfrow = c(1,1))
 # Plot the time series
 plot(niveau$Zeitstempel, niveau$Wert, type = "l", col = "blue",
      xlab = "Date", ylab = "Water Level (m ü.M.)",
@@ -244,13 +386,15 @@ top5 <- niveau[order(-niveau$Wert), ][1:5, ]
 points(top5$Zeitstempel, top5$Wert, col = "red", pch = 19)
 text(top5$Zeitstempel, top5$Wert, labels = round(top5$Wert, 2),
      pos = 3, cex = 0.8, col = "red")
+
+print(top5)
 ```
 
 ## Question b)
 
 > Now display a histogram of the water levels. What do you observe about the distribution?
 
-```{r}
+```{r nuclear2, echo=FALSE, warning=FALSE}
 # Simple histogram of water levels
 hist(niveau$Wert, 
      main = "Histogram of Water Levels", 
@@ -267,26 +411,25 @@ The distribution is right-skewed. Most levels are concentrated between 325 and 3
 
 > Explain how you would model the high water levels using a peaks-over-threshold approach.
 
-```{r}
+```{r nuclear3, echo=FALSE, warning=FALSE}
 # Calculate the 95th percentile threshold
-threshold <- quantile(niveau$Wert, 0.95)
+threshold <- quantile(niveau$Wert, 0.99)
 
 # Extract exceedances above the threshold
 exceedances <- niveau$Wert[niveau$Wert > threshold]
 
 # Print threshold and number of exceedances
-cat("95% threshold:", threshold, "\n")
+cat("99% threshold:", threshold, "\n")
 cat("Number of exceedances:", length(exceedances), "\n")
 ```
 
-Using a Peaks-over-Threshold approach, we set a threshold above which the values are considered extreme. This threshold should be high enough to focus only on rare exceedences, but not to high to avoid having too few exceedences. Here, the threshold is set at the 95th percentile, which is at 326.9117 (so around 329.91) meters. The exceedances are modeled using the Generalized Pareto Distribution, suitable for a skewed distribution. In this case, the POT approach is useful as there are a lot of non-extreme values. This approach thus focuses only on the extreme events to assess a better statistical efficiency, especially with daily data over many years.
+Using a Peaks-over-Threshold approach, we set a threshold above which the values are considered extreme. This threshold should be high enough to focus only on rare exceedences, but not to high to avoid having too few exceedences. Here, the threshold is set at the 99th percentile, which is at 327.5054 (so around 327.51) meters. The exceedances are modeled using the Generalized Pareto Distribution, suitable for a skewed distribution. In this case, the POT approach is useful as there are a lot of non-extreme values. This approach thus focuses only on the extreme events to assess a better statistical efficiency, especially with daily data over many years.
 
 ## Question d)
 
-> Comment on the aspect of clustering of extremes. How do you propose to measure and deal
-with clustering of the daily water levels?
+> Comment on the aspect of clustering of extremes. How do you propose to measure and deal with clustering of the daily water levels?
 
-```{r}
+```{r nuclear4, echo=FALSE, warning=FALSE}
 # Set time gap for declustering (e.g., 3 days)
 run_length <- 3
 
@@ -330,7 +473,7 @@ Note: take care to compute the return level in yearly terms.
 
 Using the POT approach:
 
-```{r}
+```{r nuclear5, echo=FALSE, warning=FALSE}
 # Fit GPD model
 fit <- gpd.fit(cluster_maxima, threshold)
 
@@ -361,8 +504,8 @@ rl_50_est <- return_level(50, sigma, xi)
 rl_100_est <- return_level(100, sigma, xi)
 
 # Confidence intervals
-ci_50 <- quantile(rl_50, c(0.025, 0.975))
-ci_100 <- quantile(rl_100, c(0.025, 0.975))
+ci_50   <- quantile(rl_50,  c(0.025, 0.975))
+ci_100  <- quantile(rl_100, c(0.025, 0.975))
 
 # Print nicely
 cat("50-year return level:", round(rl_50_est, 2), "\n")
@@ -372,12 +515,11 @@ cat("100-year return level:", round(rl_100_est, 2), "\n")
 cat("95% CI:", round(ci_100[1], 2), "-", round(ci_100[2], 2), "\n")
 ```
 
-The threshold is the 95th percentile to capture the extremes, have a balance between bias and variance and to have an adequate sample size to fit a GPD
+The threshold is the 99th percentile to capture the extremes, have a balance between bias and variance and to have an adequate sample size to fit a GPD
 
 ## Question f)
 
-> Explain the drawbacks and advantages of using a block maxima method instead of the one used
-in c)-e).
+> Explain the drawbacks and advantages of using a block maxima method instead of the one used in c)-e).
 
 The Block Maxima method selects the maximum observation from a given time interval, but uses only one observation per block which leads to an inefficient use of the data. The POT approach uses all the values above the given threshold and handles clustering well via declustering. It is more efficient and flexible especially when extreme events happen in clusters. Thus, the POT approach is more precise and provides more information on the behavior of extreme events.
 
@@ -385,167 +527,152 @@ The Block Maxima method selects the maximum observation from a given time interv
 
 ## Question a)
 
-> Read in the data for the daily night maximum temperatures in Lausanne. Subset the summer
-months (June to September).
+> Read in the data for the daily night maximum temperatures in Lausanne. Subset the summer months (June to September).
 
-```{r}
-# Read the CSV file
-nightmax <- read.csv("data/Practical2/nightmax.csv")
+```{r lausanne1, echo=FALSE, warning=FALSE}
+# Read the CSV files
+nightmax <- read_csv("data/Practical2/nightmax.csv", show_col_types = FALSE) %>%
+  select(-1) %>%                                  # drop left‑hand index col
+  rename(tmax = `night.max`) %>%
+  mutate(date = ymd(date))
 
-# Convert date column to Date format (assuming the column is named "date")
-nightmax$date <- as.Date(nightmax$date)
+nightmin <- read_csv("data/Practical2/nightmin.csv", show_col_types = FALSE) %>%
+  select(-1) %>%
+  rename(tmin = `night.min`) %>%
+  mutate(date = ymd(date))
 
-# Extract month
-nightmax$month <- month(nightmax$date)
+# Summer (June–August) maxima and winter (Dec–Feb) minima
+summer_max <- nightmax %>%
+  filter(month(date) %in% 6:8, !is.na(tmax))
 
-# Subset for summer months (June = 6 to September = 9)
-summer_nightmax <- subset(nightmax, month >= 6 & month <= 9)
+winter_min <- nightmin %>%
+  filter(month(date) %in% c(12, 1, 2), !is.na(tmin))
+
+# Plot summer daily maximum water levels
+ggplot(summer_max, aes(x = date, y = tmax)) +
+  geom_line(color = "steelblue") +
+  labs(title = "Summer Daily Maximum Water Levels (June–September, 2000–2021)",
+       x = "Date",
+       y = "Water Level (m above sea level)") +
+  theme_minimal()
 ```
+
+We are doing the same process for minimum to asnwer question e.
 
 ## Question b)
 
 > Assess whether extremes of the subsetted series in (a) occur in cluster.
 
-```{r}
-# Step 1: Subset summer months (June to September)
-lausanne_data <- subset(nightmax, month >= 6 & month <= 9)
+```{r lausanne2, echo=FALSE, warning=FALSE}
+# 95th‑percentile thresholds
+u_max <- quantile(summer_max$tmax, 0.95, na.rm = TRUE)
+u_min <- quantile(-winter_min$tmin, 0.95, na.rm = TRUE)  # negate minima
 
-# Step 2: Set threshold at 95th percentile
-threshold_laus <- quantile(lausanne_data$night.max, 0.95, na.rm = TRUE)
+ei_max <- extremalindex(summer_max$tmax,
+                        threshold  = u_max,
+                        method     = "runs",
+                        run.length = 3)
 
-# Step 3: Create exceedance indicator
-exceed_laus <- lausanne_data$night.max > threshold_laus
+ei_min <- extremalindex(-winter_min$tmin,
+                        threshold  = u_min,
+                        method     = "runs",
+                        run.length = 3)
 
-# Step 4: Run length encoding to find clusters
-rle_exceed <- rle(exceed_laus)
-cluster_lengths <- rle_exceed$lengths[rle_exceed$values == TRUE]
-
-# Step 5: Compute extremal index
-num_exceedances <- sum(exceed_laus, na.rm = TRUE)
-num_clusters <- length(cluster_lengths)
-extremal_index <- num_clusters / num_exceedances
-
-# Output the extremal index
-print(paste("Extremal Index (θ):", round(extremal_index, 3)))
+print(ei_max)
+print(ei_min)
 ```
 
-The obtained extremal index is 0.564, which is lower than 1. This suggests that extreme night temperatures during summer in Lausanne tend to occur in clusters rather than being isolated. This means that if you observe one extremely hot night, there is a higher chance that other extreme nights will follow shortly, such as during a heatwave for example.
+The obtained extremal index is 0.402, which is lower than 1. This suggests that extreme night temperatures during summer in Lausanne tend to occur in clusters rather than being isolated. This means that if you observe one extremely hot night, there is a higher chance that other extreme nights will follow shortly, such as during a heatwave for example.
 
 ## Question c)
 
 > Decluster the data from (a) using a suitable threshold. Plot the resulting declustered data.
 (Hint: you may want to use the extRemes package.)
 
-```{r}
-# Extract and clean summer night max temperatures
-summer_temps <- na.omit(lausanne_data$night.max)
+```{r lausanne3, echo=FALSE, warning=FALSE}
+# Retain cluster peaks only (r = 3)
+dc_max <- decluster(summer_max$tmax,
+                    threshold = u_max,
+                    method    = "runs",
+                    r         = 3)
 
-# Set 95th percentile threshold
-threshold <- quantile(summer_temps, 0.95)
+dc_min <- decluster(-winter_min$tmin,
+                    threshold = u_min,
+                    method    = "runs",
+                    r         = 3)
 
-# Decluster the series
-declustered <- decluster(summer_temps, threshold = threshold)
+# Excesses over threshold
+excess_max <- dc_max[dc_max > u_max] - u_max
+excess_min <- dc_min[dc_min > u_min] - u_min
 
-# Line plot of the declustered extremes
-plot(declustered, type = "l", col = "blue", lwd = 2,
-     main = "Line Plot of Declustered Extreme Night Max Temperatures",
-     xlab = "Index (declustered events)", ylab = "Temperature (°C)")
+plot(excess_max, type = "h", col = "firebrick",
+     main = "Declustered Summer Night Temperature Excesses",
+     xlab = "Cluster Index", ylab = "Excess over Threshold (°C)")
 ```
+
+After declustering the extreme summer night temperatures using the 95th percentile threshold and a 3-day run length, we isolated 42 independent exceedances above the threshold. The resulting plot of declustered excesses reveals a wide range of magnitudes, with some cluster peaks exceeding 4°C above the threshold. This confirms the presence of significant and varied extreme temperature events, now stripped of temporal dependence. 
 
 ## Question d)
 
 > Fit a GPD to the data, both raw and declustered. Assess the quality of the fit.
 
-```{r}
-# Fit GPD to raw data
-gpd_raw <- fevd(summer_temps, threshold = threshold, type = "GP", method = "MLE")
+```{r lausanne4, echo=FALSE, warning=FALSE}
+fit_max_raw <- fevd(summer_max$tmax[summer_max$tmax > u_max] - u_max,
+                    type = "GP", threshold = 0, method = "MLE")
 
-# Fit GPD to declustered data
-declustered <- decluster(summer_temps, threshold = threshold)
-gpd_declust <- fevd(declustered, threshold = threshold, type = "GP", method = "MLE")
+fit_max_dc  <- fevd(excess_max, type = "GP", threshold = 0, method = "MLE")
+
+fit_min_raw <- fevd((-winter_min$tmin)[-winter_min$tmin > u_min] - u_min,
+                    type = "GP", threshold = 0, method = "MLE")
+
+fit_min_dc  <- fevd(excess_min, type = "GP", threshold = 0, method = "MLE")
+
+par(mfrow = c(1,2))
+plot(fit_max_raw, type = "qq", main = "QQ-Plot: Raw Summer Maxima (GPD Fit)")
+plot(fit_max_dc, type = "qq", main = "QQ-Plot: Declustered Summer Maxima (GPD Fit)")
+
+plot(fit_min_raw, type = "qq", main = "QQ-Plot: Raw Winter Minima (GPD Fit)")
+plot(fit_min_dc, type = "qq", main = "QQ-Plot: Declustered Winter Minima (GPD Fit)")
 ```
 
-```{r}
-plot(gpd_raw, main = "Raw Data - GPD Fit")
-```
-
-For the raw data, looking at the QQ-plot, the points seem quite aligned with the line, so the fit seems okay, same thing for the PP-plot and the return level plot. The density plot shows some imperfection, but the fit seems decent.
-
-```{r}
-plot(gpd_declust, main = "Declustered Data - GPD Fit")
-```
-
-For the declustered plot, the QQ-plot and return level seem decent despite some imperfections. However, the PP-plot seem to have some deviations and some points go outside the confidence bounds, indicating a weaker fit. For the density plot, there is a bit of a mismatch at the peak, though the tails are well captured. The declustered data seem to not fit as good as the raw one.
+Despite the raw model having points more aligned in the QQ-plot, the declustered model is theoretically better due to the lower AIC. The deviations in the QQ-plot for the declustered can be explained due to the smaller sample than the raw data.
 
 ## Question e)
 
 > Repeat the above analysis for the negatives of the daily nightly minimum temperatures for the winter months (November-February).
 
-```{r}
-# Read the CSV file
-nightmin <- read.csv("data/Practical2/nightmin.csv")
+```{r lausanne5, echo=FALSE, warning=FALSE}
+summary_list <- list(
+  winter_extremal_index = ei_min,
+  gpd_winter_raw        = fit_min_raw,
+  gpd_winter_dc         = fit_min_dc
+)
+print(summary_list)
 
-# Convert date column to Date format
-nightmin$date <- as.Date(nightmin$date)
+par(mfrow = c(1,1))
+# Plot summer daily maximum water levels
+ggplot(winter_min, aes(x = date, y = tmin)) +
+  geom_line(color = "steelblue") +
+  labs(title = "Summer Daily Minimum Water Levels (November–February, 2000–2021)",
+       x = "Date",
+       y = "Water Level (m above sea level)") +
+  theme_minimal()
 
-# Extract month
-nightmin$month <- month(nightmin$date)
+plot(excess_min, type = "h", col = "firebrick",
+     main = "Declustered Winter Night Temperature Excesses",
+     xlab = "Cluster Index", ylab = "Excess over Threshold (°C)")
 
-# Subset for winter months (November to February)
-winter_nightmin <- subset(nightmin, month %in% c(11, 12, 1, 2))
+par(mfrow = c(1,2))
+plot(fit_min_raw, type = "qq", main = "QQ-Plot: Raw Winter Minima (GPD Fit)")
+plot(fit_min_dc, type = "qq", main = "QQ-Plot: Declustered Winter Minima (GPD Fit)")
 ```
 
-Here, we want to analyze cold extremes.
+We apply the negative to the winter values to treat the extremely low values as high values for modelling purposes. We then do an extremal index and we obtain 0.367, lower than 1, indicating clustering. We then declustered using the 95th percentile threshold to the negated temperatures and the plot shows that some peaks go even above 6 degrees. Fitting the model using GPD shows that the AIC for the declustered is again lower than raw, so a better fit.
 
-```{r}
-# Apply negative to the temperatures for cold extremes
-winter_nightmin$neg_night_min <- -winter_nightmin$night.min
 
-# Remove missing values
-winter_temps <- na.omit(winter_nightmin$neg_night_min)
 
-# Set threshold at 95th percentile
-threshold_winter <- quantile(winter_temps, 0.95)
 
-# Create exceedance indicator
-exceed_winter <- winter_temps > threshold_winter
 
-# Run-length encoding to find clusters
-rle_exceed_winter <- rle(exceed_winter)
-cluster_lengths_winter <- rle_exceed_winter$lengths[rle_exceed_winter$values == TRUE]
 
-# Compute extremal index
-num_exceedances_winter <- sum(exceed_winter, na.rm = TRUE)
-num_clusters_winter <- length(cluster_lengths_winter)
-extremal_index_winter <- num_clusters_winter / num_exceedances_winter
 
-print(paste("Extremal Index (θ):", round(extremal_index_winter, 3)))
-```
 
-We apply the negative to the winter values to treat the extremely low values as high values for modelling purposes. We then do an extremal index and we obtain 0.402, lower than 1, indicating clustering.
-
-```{r}
-# Decluster the series
-declustered_wint <- decluster(winter_temps, threshold = threshold_winter)
-
-# Plot line of declustered values
-plot(declustered_wint, type = "l", col = "blue", lwd = 2,
-     main = "Line Plot of Declustered Extreme Night Min Temperatures (Negated)",
-     xlab = "Index (declustered events)", ylab = "Negated Temperature (°C)")
-```
-
-We then keep only one value per cluster.
-
-```{r}
-# Fit GPD to raw data
-gpd_raw_wint <- fevd(winter_temps, threshold = threshold_winter, type = "GP", method = "MLE")
-
-# Fit GPD to declustered data
-gpd_declust_wint <- fevd(declustered, threshold = threshold_winter, type = "GP", method = "MLE")
-
-plot(gpd_raw_wint, main = "Raw Data - GPD Fit (Negated Winter Min Temps)")
-plot(gpd_declust_wint, main = "Declustered Data - GPD Fit (Negated Winter Min Temps)")
-```
-
-We fit a GPD to both raw and declustered data and assess the quality of the GPD fit for both data.
-The GPD fit to the raw data shows a reasonably good performance compared to the decluster fit. The latter is due to the reduced number of data points after declustering.
