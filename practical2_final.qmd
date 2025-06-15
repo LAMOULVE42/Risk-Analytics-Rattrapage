@@ -29,7 +29,7 @@ The `venice90` dataset can be found in the `VGAM` package.
 
 > Read in the data. Extract and represent the yearly max values from 1940 to 2009. What do you observe ?
 
-```{r venice1, echo=FALSE, warning=FALSE}
+```{r venice1, warning=FALSE}
 library(VGAM)
 data(venice90)
 
@@ -58,7 +58,7 @@ We can observe some variability over the years and a slight upward trend, so the
 
 > We are end of 2009 and would like to predict the yearly maximum values over the next 13 years (from 2010 to 2022). A naive approach consists of fitting a linear model on the observed yearly maxima and predict their values for 2010–2022. Proceed to this prediction and provide confidence intervals.
 
-```{r venice2, echo=FALSE, warning=FALSE}
+```{r venice2, warning=FALSE}
 # Fit linear model
 model <- lm(max_sealevel ~ year, data = yearly_max)
 
@@ -88,7 +88,7 @@ We used a confidence interval of 99% to predict for the years 2010 to 2022.
 
 > Represent in the same graph the predicted yearly max values for the period 2010–2022, their pointwise confidence bounds and the observed values greater than 140 cm from the table below.
 
-```{r venice3, echo=FALSE, warning=FALSE}
+```{r venice3, warning=FALSE}
 # Observed values > 140 cm
 extreme_vals <- yearly_max %>% filter(max_sealevel > 140)
 
@@ -119,7 +119,7 @@ This plot provides all the necessary information, from the historical data in th
 
 > Fit a GEV a with constant parameters to the historical yearly max values. Fit a GEV with time varying location parameter. Compare the two embedded models using likelihood ratio test (LRT). Show diagnostic plots.
 
-```{r venice4, echo=FALSE, warning=FALSE}
+```{r venice4, warning=FALSE}
 # Prepare the data (1940–2009), extract yearly maxima and center the year
 venice90_df <- as_tibble(venice90) %>%
   filter(year >= 1940, year <= 2009) %>% 
@@ -176,7 +176,7 @@ We fitted a constant and a time-varying model. The latter is better thanks to th
 
 > Add if necessary a time varying scale and or shape GEV parameter. Select the best model according to LRT.
 
-```{r venice5, echo=FALSE, warning=FALSE}
+```{r venice5, warning=FALSE}
 # Fit GEV models with additional time-varying parameters
 fit_loc_scale <- gev.fit(sea_levels, ydat = year_covariate, mul = 1, sigl = 1,
                          show = FALSE) |> name_gev_par(location_trend = TRUE, scale_trend = TRUE)
@@ -243,7 +243,7 @@ The best model includes time-varying location and shape parameters. The addition
 > f) Predict the 13-years return level, each year from 2010 to 2022.
 > g) Calculate confidence bands for these predictions.
 
-```{r venice6, echo=FALSE, warning=FALSE}
+```{r venice6, warning=FALSE}
 # Extract parameter value by name (return 0 if not found)
 get_param <- function(params, name) {
   ifelse(name %in% names(params), params[[name]], 0)
@@ -332,7 +332,7 @@ For each year from 2010 to 2022, the estimated 13-year return level gradually in
 
 > Represent in the same graph your predictions of the 13-years return levels, their pointwise confidence intervals, the predicted yearly max values from the linear model and the observed values greater than 140 cm from the table below.
 
-```{r venice7, echo=FALSE, warning=FALSE}
+```{r venice7, warning=FALSE}
 # Linear model forecasts 
 linear_forecast_df <- pred_df %>%
   rename(lower_ci_linear = lwr, upper_ci_linear = upr, predicted_linear = fit)
@@ -368,7 +368,7 @@ While both models provide useful insights, the linear model clearly underestimat
 
 > Read in the data. Display a time series plot of the water level across the data range and try to identify times of highest levels.
 
-```{r nuclear1, echo=FALSE, warning=FALSE}
+```{r nuclear1, warning=FALSE}
 # Load the Rdata file
 load("data/Practical2/niveau.Rdata")
 
@@ -394,7 +394,7 @@ print(top5)
 
 > Now display a histogram of the water levels. What do you observe about the distribution?
 
-```{r nuclear2, echo=FALSE, warning=FALSE}
+```{r nuclear2, warning=FALSE}
 # Simple histogram of water levels
 hist(niveau$Wert, 
      main = "Histogram of Water Levels", 
@@ -411,7 +411,7 @@ The distribution is right-skewed. Most levels are concentrated between 325 and 3
 
 > Explain how you would model the high water levels using a peaks-over-threshold approach.
 
-```{r nuclear3, echo=FALSE, warning=FALSE}
+```{r nuclear3, warning=FALSE}
 # Calculate the 95th percentile threshold
 threshold <- quantile(niveau$Wert, 0.99)
 
@@ -429,7 +429,7 @@ Using a Peaks-over-Threshold approach, we set a threshold above which the values
 
 > Comment on the aspect of clustering of extremes. How do you propose to measure and deal with clustering of the daily water levels?
 
-```{r nuclear4, echo=FALSE, warning=FALSE}
+```{r nuclear4, warning=FALSE}
 # Set time gap for declustering (e.g., 3 days)
 run_length <- 3
 
@@ -473,7 +473,7 @@ Note: take care to compute the return level in yearly terms.
 
 Using the POT approach:
 
-```{r nuclear5, echo=FALSE, warning=FALSE}
+```{r nuclear5, warning=FALSE}
 # Fit GPD model
 fit <- gpd.fit(cluster_maxima, threshold)
 
@@ -529,7 +529,7 @@ The Block Maxima method selects the maximum observation from a given time interv
 
 > Read in the data for the daily night maximum temperatures in Lausanne. Subset the summer months (June to September).
 
-```{r lausanne1, echo=FALSE, warning=FALSE}
+```{r lausanne1, warning=FALSE}
 # Read the CSV files
 nightmax <- read_csv("data/Practical2/nightmax.csv", show_col_types = FALSE) %>%
   select(-1) %>%                                  # drop left‑hand index col
@@ -563,7 +563,7 @@ We are doing the same process for minimum to asnwer question e.
 
 > Assess whether extremes of the subsetted series in (a) occur in cluster.
 
-```{r lausanne2, echo=FALSE, warning=FALSE}
+```{r lausanne2, warning=FALSE}
 # 95th‑percentile thresholds
 u_max <- quantile(summer_max$tmax, 0.95, na.rm = TRUE)
 u_min <- quantile(-winter_min$tmin, 0.95, na.rm = TRUE)  # negate minima
@@ -589,7 +589,7 @@ The obtained extremal index is 0.402, which is lower than 1. This suggests that 
 > Decluster the data from (a) using a suitable threshold. Plot the resulting declustered data.
 (Hint: you may want to use the extRemes package.)
 
-```{r lausanne3, echo=FALSE, warning=FALSE}
+```{r lausanne3, warning=FALSE}
 # Retain cluster peaks only (r = 3)
 dc_max <- decluster(summer_max$tmax,
                     threshold = u_max,
@@ -616,7 +616,7 @@ After declustering the extreme summer night temperatures using the 95th percenti
 
 > Fit a GPD to the data, both raw and declustered. Assess the quality of the fit.
 
-```{r lausanne4, echo=FALSE, warning=FALSE}
+```{r lausanne4, warning=FALSE}
 fit_max_raw <- fevd(summer_max$tmax[summer_max$tmax > u_max] - u_max,
                     type = "GP", threshold = 0, method = "MLE")
 
@@ -641,7 +641,7 @@ Despite the raw model having points more aligned in the QQ-plot, the declustered
 
 > Repeat the above analysis for the negatives of the daily nightly minimum temperatures for the winter months (November-February).
 
-```{r lausanne5, echo=FALSE, warning=FALSE}
+```{r lausanne5, warning=FALSE}
 summary_list <- list(
   winter_extremal_index = ei_min,
   gpd_winter_raw        = fit_min_raw,
@@ -668,11 +668,3 @@ plot(fit_min_dc, type = "qq", main = "QQ-Plot: Declustered Winter Minima (GPD Fi
 ```
 
 We apply the negative to the winter values to treat the extremely low values as high values for modelling purposes. We then do an extremal index and we obtain 0.367, lower than 1, indicating clustering. We then declustered using the 95th percentile threshold to the negated temperatures and the plot shows that some peaks go even above 6 degrees. Fitting the model using GPD shows that the AIC for the declustered is again lower than raw, so a better fit.
-
-
-
-
-
-
-
-
