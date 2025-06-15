@@ -18,9 +18,12 @@ format:
 
 # Introduction
 
-This documents is the annex to our final report for group 1. It contains the full code for the practicals 1 and 2 of the retake with the results and some discussions. This allows anyone to reproduce our results and to understand the code we used.
+This documents is the annex to our final report for the retake project. It contains the full code for the practicals 1 and 2 of the retake with the results and some discussions. This allows anyone to reproduce our results and to understand the code we used.
 
 {{< pagebreak >}}
+```{r setup, include=FALSE}
+source(here::here("setup.R"))
+```
 
-```{r child = c("setup.R", "practical1_final.qmd", "practical2_final.qmd")}
+```{r child = c("practical1_final.qmd", "practical2_final.qmd")}
 ```

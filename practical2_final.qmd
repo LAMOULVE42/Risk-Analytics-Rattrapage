@@ -16,12 +16,12 @@ editor_options:
   chunk_output_type: console
 ---
 
-```{r setup, include=FALSE}
+```{r setup p2, include=FALSE}
 # load the required packages and install them if they are not.
 source(here::here("setup.R"))
 ```
 
-# Part 1 - Venice
+# Practical 2, Part 1 - Venice
 
 The `venice90` dataset can be found in the `VGAM` package.
 
@@ -362,7 +362,7 @@ ggplot() +
 
 While both models provide useful insights, the linear model clearly underestimates extremes and provides overly narrow confidence intervals. The GEV approach, especially with time-varying parameters, is more suited for modeling extremes and gives a more realistic picture of sea level risk. However, even the GEV predictions fall short of the most recent high events, such as 2.04m in 2022, indicating that the system is non-stationary and that risk is increasing over time. This shift is emphasized by the concentration of extreme events in the 21st century, suggesting that return periods are shortening and that what was once a 13-year event may now be happening more frequently.
 
-# Part 2 - Nuclear Reactors
+# Practical 2, Part 2 - Nuclear Reactors
 
 ## Question a)
 
@@ -523,7 +523,7 @@ The threshold is the 99th percentile to capture the extremes, have a balance bet
 
 The Block Maxima method selects the maximum observation from a given time interval, but uses only one observation per block which leads to an inefficient use of the data. The POT approach uses all the values above the given threshold and handles clustering well via declustering. It is more efficient and flexible especially when extreme events happen in clusters. Thus, the POT approach is more precise and provides more information on the behavior of extreme events.
 
-# Part 3 - Night temperatures in Lausanne
+# Practical 2, Part 3 - Night temperatures in Lausanne
 
 ## Question a)
 

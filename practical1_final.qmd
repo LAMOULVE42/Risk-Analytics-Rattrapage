@@ -16,16 +16,18 @@ editor_options:
   chunk_output_type: console
 ---
 
-```{r setup, include=FALSE}
+```{r setup p1, include=FALSE}
 # load the required packages and install them if they are not.
 source(here::here("setup.R"))
 ```
 
-# Part 1 - Financial Returns & Normality
+# Practical 1, Part 1 - Financial Returns & Normality
 
 ## Question a)
 
 > Read in the data. Then, assess the stationarity of the (raw) stock indices.
+
+As discussed with the teacher, we will only select 2 indices: SP500 & CAC40.
 
 ```{r setup1, echo=FALSE, warning=FALSE}
 # Load SP500 & CAC40 data
@@ -181,7 +183,7 @@ qqline(cac40_ret, col="red")
 
 Despite some deviations from points in the extremes, the QQ-plots confirm that a Student's t-distribution provides a better fit for both the SP500 and CAC40 log returns compared to a normal distribution. The heavier tails of the t-distribution captures the extremes better. It is also consistent with question d).
 
-# Part 2 - Financial time series, volatility and the random walk hypothesis
+# Practical 1, Part 2 - Financial time series, volatility and the random walk hypothesis
 
 ## Question a)
 
